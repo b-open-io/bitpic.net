@@ -9,9 +9,11 @@ export interface AvatarResponse {
 
 export interface FeedItem {
   paymail: string;
+  outpoint: string;
   url: string;
   txid: string;
   timestamp: number;
+  confirmed: boolean;
 }
 
 export interface FeedResponse {

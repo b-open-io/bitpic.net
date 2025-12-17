@@ -2,34 +2,65 @@ import { Header } from "@/components/header"
 import { Hero } from "@/components/hero"
 import { Feed } from "@/components/feed"
 import { Footer } from "@/components/footer"
+import { formatRelativeTime, getAvatarUrl } from "@/lib/utils"
 
-const mockConfirmed = [
-  { paymail: "satoshi@relayx.io", imageUrl: "/avatar.png", timestamp: "2m ago" },
-  { paymail: "alice@handcash.io", imageUrl: "/avatar.png", timestamp: "5m ago" },
-  { paymail: "bob@moneybutton.com", imageUrl: "/avatar.png", timestamp: "12m ago" },
-  { paymail: "charlie@simply.cash", imageUrl: "/avatar.png", timestamp: "23m ago" },
-  { paymail: "diana@relayx.io", imageUrl: "/avatar.png", timestamp: "1h ago" },
-  { paymail: "eve@handcash.io", imageUrl: "/avatar.png", timestamp: "2h ago" },
-  { paymail: "frank@moneybutton.com", imageUrl: "/avatar.png", timestamp: "3h ago" },
-  { paymail: "grace@simply.cash", imageUrl: "/avatar.png", timestamp: "5h ago" },
-  { paymail: "henry@relayx.io", imageUrl: "/avatar.png", timestamp: "8h ago" },
-  { paymail: "isabella@handcash.io", imageUrl: "/avatar.png", timestamp: "12h ago" },
-  { paymail: "jack@moneybutton.com", imageUrl: "/avatar.png", timestamp: "1d ago" },
-  { paymail: "kate@simply.cash", imageUrl: "/avatar.png", timestamp: "2d ago" },
-]
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
-const mockUnconfirmed = [
-  { paymail: "newuser@relayx.io", imageUrl: "/avatar.png", timestamp: "pending" },
-  { paymail: "test@handcash.io", imageUrl: "/avatar.png", timestamp: "pending" },
-]
+interface FeedItem {
+  paymail: string
+  url: string
+  txid: string
+  timestamp: number
+  confirmed: boolean
+}
 
-export default function Home() {
+interface FeedResponse {
+  items: FeedItem[]
+  total: number
+  offset: number
+  limit: number
+}
+
+async function getFeed(): Promise<FeedResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/feed?limit=50`, {
+      next: { revalidate: 10 },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to fetch feed: ${response.statusText}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error("Error fetching feed:", error)
+    return { items: [], total: 0, offset: 0, limit: 50 }
+  }
+}
+
+export default async function Home() {
+  const feed = await getFeed()
+
+  const confirmed = feed.items
+    .filter((item) => item.confirmed !== false)
+    .map((item) => ({
+      paymail: item.paymail,
+      imageUrl: item.url || getAvatarUrl(item.paymail),
+      timestamp: formatRelativeTime(item.timestamp),
+    }))
+
+  const unconfirmed = feed.items
+    .filter((item) => item.confirmed === false)
+    .map((item) => ({
+      paymail: item.paymail,
+      imageUrl: item.url || getAvatarUrl(item.paymail),
+      timestamp: "pending",
+    }))
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
         <Hero />
-        <Feed confirmed={mockConfirmed} unconfirmed={mockUnconfirmed} />
+        <Feed confirmed={confirmed} unconfirmed={unconfirmed} />
       </main>
       <Footer />
     </div>

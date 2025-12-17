@@ -82,7 +82,6 @@ func (s *Subscriber) connect(url string) error {
 	log.Println("Connected to JungleBus, listening for transactions...")
 
 	// Read SSE stream
-	decoder := json.NewDecoder(resp.Body)
 	buffer := make([]byte, 0, 8192)
 
 	for {
@@ -165,12 +164,19 @@ func (s *Subscriber) processTransaction(msg *JungleBusMessage) error {
 	}
 	data.Timestamp = timestamp
 
+	// Determine confirmation status (confirmed if block hash exists)
+	confirmed := msg.BlockHash != ""
+
 	// Store in Redis
-	if err := s.redis.SetAvatar(data.Paymail, data.Outpoint, timestamp); err != nil {
+	if err := s.redis.SetAvatar(data.Paymail, data.Outpoint, msg.ID, timestamp, confirmed); err != nil {
 		return fmt.Errorf("failed to store avatar: %w", err)
 	}
 
-	log.Printf("New BitPic avatar: %s -> %s", data.Paymail, data.Outpoint)
+	status := "unconfirmed"
+	if confirmed {
+		status = "confirmed"
+	}
+	log.Printf("New BitPic avatar (%s): %s -> %s", status, data.Paymail, data.Outpoint)
 
 	return nil
 }

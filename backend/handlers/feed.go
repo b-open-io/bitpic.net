@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"os"
 	"strconv"
 
 	"github.com/b-open-io/bitpic/storage"
@@ -9,13 +10,27 @@ import (
 
 // FeedHandler handles the /api/feed endpoint
 type FeedHandler struct {
-	redis *storage.RedisClient
+	redis        *storage.RedisClient
+	ordfsBaseURL string
+}
+
+// FeedResponse wraps the feed response
+type FeedResponse struct {
+	Items  []storage.FeedItem `json:"items"`
+	Total  int64              `json:"total"`
+	Offset int64              `json:"offset"`
+	Limit  int64              `json:"limit"`
 }
 
 // NewFeedHandler creates a new feed handler
 func NewFeedHandler(redis *storage.RedisClient) *FeedHandler {
+	ordfsBaseURL := os.Getenv("ORDFS_BASE_URL")
+	if ordfsBaseURL == "" {
+		ordfsBaseURL = "https://ordfs.network"
+	}
 	return &FeedHandler{
-		redis: redis,
+		redis:        redis,
+		ordfsBaseURL: ordfsBaseURL,
 	}
 }
 
@@ -41,7 +56,7 @@ func (h *FeedHandler) Handle(c *fiber.Ctx) error {
 	}
 
 	// Get feed items
-	items, err := h.redis.GetFeed(offset, limit)
+	items, total, err := h.redis.GetFeed(offset, limit, h.ordfsBaseURL)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch feed",
@@ -53,5 +68,10 @@ func (h *FeedHandler) Handle(c *fiber.Ctx) error {
 		items = []storage.FeedItem{}
 	}
 
-	return c.JSON(items)
+	return c.JSON(FeedResponse{
+		Items:  items,
+		Total:  total,
+		Offset: offset,
+		Limit:  limit,
+	})
 }

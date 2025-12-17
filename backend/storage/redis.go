@@ -20,6 +20,8 @@ type AvatarData struct {
 	Outpoint  string `json:"outpoint"`
 	Timestamp int64  `json:"timestamp"`
 	Paymail   string `json:"paymail"`
+	TxID      string `json:"txid"`
+	Confirmed bool   `json:"confirmed"`
 }
 
 // FeedItem represents an item in the feed
@@ -27,6 +29,9 @@ type FeedItem struct {
 	Paymail   string `json:"paymail"`
 	Outpoint  string `json:"outpoint"`
 	Timestamp int64  `json:"timestamp"`
+	URL       string `json:"url"`
+	TxID      string `json:"txid"`
+	Confirmed bool   `json:"confirmed"`
 }
 
 // NewRedisClient creates a new Redis client connection
@@ -51,11 +56,13 @@ func NewRedisClient(redisURL string) (*RedisClient, error) {
 }
 
 // SetAvatar stores avatar data for a paymail
-func (r *RedisClient) SetAvatar(paymail, outpoint string, timestamp int64) error {
+func (r *RedisClient) SetAvatar(paymail, outpoint, txid string, timestamp int64, confirmed bool) error {
 	data := AvatarData{
 		Outpoint:  outpoint,
 		Timestamp: timestamp,
 		Paymail:   paymail,
+		TxID:      txid,
+		Confirmed: confirmed,
 	}
 
 	jsonData, err := json.Marshal(data)
@@ -107,13 +114,19 @@ func (r *RedisClient) GetAvatar(paymail string) (string, error) {
 }
 
 // GetFeed retrieves paginated feed items
-func (r *RedisClient) GetFeed(offset, limit int64) ([]FeedItem, error) {
+func (r *RedisClient) GetFeed(offset, limit int64, ordfsBaseURL string) ([]FeedItem, int64, error) {
 	feedKey := "bitpic:feed"
+
+	// Get total count
+	total, err := r.client.ZCard(r.ctx, feedKey).Result()
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get feed count: %w", err)
+	}
 
 	// Get paymails from sorted set (reversed for newest first)
 	paymails, err := r.client.ZRevRange(r.ctx, feedKey, offset, offset+limit-1).Result()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get feed: %w", err)
+		return nil, 0, fmt.Errorf("failed to get feed: %w", err)
 	}
 
 	var items []FeedItem
@@ -129,14 +142,18 @@ func (r *RedisClient) GetFeed(offset, limit int64) ([]FeedItem, error) {
 			continue
 		}
 
+		url := fmt.Sprintf("%s/%s", ordfsBaseURL, data.Outpoint)
 		items = append(items, FeedItem{
 			Paymail:   data.Paymail,
 			Outpoint:  data.Outpoint,
 			Timestamp: data.Timestamp,
+			URL:       url,
+			TxID:      data.TxID,
+			Confirmed: data.Confirmed,
 		})
 	}
 
-	return items, nil
+	return items, total, nil
 }
 
 // Exists checks if an avatar exists for a paymail
