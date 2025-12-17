@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* Sharp corners */
+  --radius: 0.25rem;
+
+  /* Light mode - warm cream background */
+  --background: hsl(40 20% 98%);
+  --foreground: hsl(20 14.3% 4.1%);
+  --card: hsl(40 20% 98%);
+  --card-foreground: hsl(20 14.3% 4.1%);
+  --popover: hsl(40 20% 98%);
+  --popover-foreground: hsl(20 14.3% 4.1%);
+
+  /* Warm amber/gold primary */
+  --primary: hsl(35 92% 50%);
+  --primary-foreground: hsl(0 0% 100%);
+
+  /* Neutral tones */
+  --secondary: hsl(40 10% 90%);
+  --secondary-foreground: hsl(20 14.3% 4.1%);
+  --muted: hsl(40 10% 92%);
+  --muted-foreground: hsl(0 0% 45%);
+  --accent: hsl(40 10% 90%);
+  --accent-foreground: hsl(20 14.3% 4.1%);
+
+  /* Borders and inputs */
+  --border: hsl(0 0% 89%);
+  --input: hsl(0 0% 89%);
+  --ring: hsl(35 92% 50%);
+
+  /* Destructive */
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme inline {
+    /* Dark mode - charcoal background */
+    --background: hsl(20 14.3% 4.1%);
+    --foreground: hsl(40 20% 98%);
+    --card: hsl(20 14.3% 4.1%);
+    --card-foreground: hsl(40 20% 98%);
+    --popover: hsl(20 14.3% 4.1%);
+    --popover-foreground: hsl(40 20% 98%);
+
+    /* Warm amber/gold primary */
+    --primary: hsl(35 92% 50%);
+    --primary-foreground: hsl(0 0% 100%);
+
+    /* Neutral tones */
+    --secondary: hsl(20 5% 10%);
+    --secondary-foreground: hsl(40 20% 98%);
+    --muted: hsl(20 5% 10%);
+    --muted-foreground: hsl(0 0% 60%);
+    --accent: hsl(20 5% 10%);
+    --accent-foreground: hsl(40 20% 98%);
+
+    /* Borders and inputs */
+    --border: hsl(0 0% 15%);
+    --input: hsl(0 0% 15%);
+    --ring: hsl(35 92% 50%);
+
+    /* Destructive */
+    --destructive: hsl(0 62.8% 30.6%);
+    --destructive-foreground: hsl(40 20% 98%);
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}

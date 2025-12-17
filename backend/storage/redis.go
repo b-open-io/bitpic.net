@@ -1,0 +1,177 @@
+package storage
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
+
+// RedisClient wraps the Redis client with BitPic-specific operations
+type RedisClient struct {
+	client *redis.Client
+	ctx    context.Context
+}
+
+// AvatarData represents avatar metadata stored in Redis
+type AvatarData struct {
+	Outpoint  string `json:"outpoint"`
+	Timestamp int64  `json:"timestamp"`
+	Paymail   string `json:"paymail"`
+}
+
+// FeedItem represents an item in the feed
+type FeedItem struct {
+	Paymail   string `json:"paymail"`
+	Outpoint  string `json:"outpoint"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// NewRedisClient creates a new Redis client connection
+func NewRedisClient(redisURL string) (*RedisClient, error) {
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
+	}
+
+	client := redis.NewClient(opts)
+	ctx := context.Background()
+
+	// Test connection
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+	}
+
+	return &RedisClient{
+		client: client,
+		ctx:    ctx,
+	}, nil
+}
+
+// SetAvatar stores avatar data for a paymail
+func (r *RedisClient) SetAvatar(paymail, outpoint string, timestamp int64) error {
+	data := AvatarData{
+		Outpoint:  outpoint,
+		Timestamp: timestamp,
+		Paymail:   paymail,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal avatar data: %w", err)
+	}
+
+	// Store current avatar
+	key := fmt.Sprintf("bitpic:current:%s", paymail)
+	if err := r.client.Set(r.ctx, key, jsonData, 0).Err(); err != nil {
+		return fmt.Errorf("failed to set avatar: %w", err)
+	}
+
+	// Add to feed (sorted set by timestamp)
+	feedKey := "bitpic:feed"
+	if err := r.client.ZAdd(r.ctx, feedKey, redis.Z{
+		Score:  float64(timestamp),
+		Member: paymail,
+	}).Err(); err != nil {
+		return fmt.Errorf("failed to add to feed: %w", err)
+	}
+
+	// Store metadata for feed lookup
+	metaKey := fmt.Sprintf("bitpic:meta:%s", paymail)
+	if err := r.client.Set(r.ctx, metaKey, jsonData, 0).Err(); err != nil {
+		return fmt.Errorf("failed to set metadata: %w", err)
+	}
+
+	return nil
+}
+
+// GetAvatar retrieves the current avatar outpoint for a paymail
+func (r *RedisClient) GetAvatar(paymail string) (string, error) {
+	key := fmt.Sprintf("bitpic:current:%s", paymail)
+	result, err := r.client.Get(r.ctx, key).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get avatar: %w", err)
+	}
+
+	var data AvatarData
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		return "", fmt.Errorf("failed to unmarshal avatar data: %w", err)
+	}
+
+	return data.Outpoint, nil
+}
+
+// GetFeed retrieves paginated feed items
+func (r *RedisClient) GetFeed(offset, limit int64) ([]FeedItem, error) {
+	feedKey := "bitpic:feed"
+
+	// Get paymails from sorted set (reversed for newest first)
+	paymails, err := r.client.ZRevRange(r.ctx, feedKey, offset, offset+limit-1).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get feed: %w", err)
+	}
+
+	var items []FeedItem
+	for _, paymail := range paymails {
+		metaKey := fmt.Sprintf("bitpic:meta:%s", paymail)
+		result, err := r.client.Get(r.ctx, metaKey).Result()
+		if err != nil {
+			continue
+		}
+
+		var data AvatarData
+		if err := json.Unmarshal([]byte(result), &data); err != nil {
+			continue
+		}
+
+		items = append(items, FeedItem{
+			Paymail:   data.Paymail,
+			Outpoint:  data.Outpoint,
+			Timestamp: data.Timestamp,
+		})
+	}
+
+	return items, nil
+}
+
+// Exists checks if an avatar exists for a paymail
+func (r *RedisClient) Exists(paymail string) (bool, error) {
+	key := fmt.Sprintf("bitpic:current:%s", paymail)
+	count, err := r.client.Exists(r.ctx, key).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to check existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// CacheImage stores an image in cache with TTL
+func (r *RedisClient) CacheImage(outpoint string, data []byte, ttl time.Duration) error {
+	key := fmt.Sprintf("bitpic:image:%s", outpoint)
+	if err := r.client.Set(r.ctx, key, data, ttl).Err(); err != nil {
+		return fmt.Errorf("failed to cache image: %w", err)
+	}
+	return nil
+}
+
+// GetCachedImage retrieves a cached image
+func (r *RedisClient) GetCachedImage(outpoint string) ([]byte, error) {
+	key := fmt.Sprintf("bitpic:image:%s", outpoint)
+	result, err := r.client.Get(r.ctx, key).Bytes()
+	if err == redis.Nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cached image: %w", err)
+	}
+	return result, nil
+}
+
+// Close closes the Redis connection
+func (r *RedisClient) Close() error {
+	return r.client.Close()
+}
