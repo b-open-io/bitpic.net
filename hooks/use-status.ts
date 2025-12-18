@@ -1,13 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import type { StatusResponse } from "@/lib/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-if (!API_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL environment variable is required");
-}
-
 async function fetchStatus(): Promise<StatusResponse> {
-  const response = await fetch(`${API_URL}/api/status`);
+  // Use relative URL - Next.js rewrites /api/status to the backend
+  const response = await fetch("/api/status");
   if (!response.ok) {
     throw new Error(`Failed to fetch status: ${response.statusText}`);
   }

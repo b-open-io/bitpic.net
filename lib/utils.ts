@@ -23,9 +23,6 @@ export function formatRelativeTime(timestamp: number): string {
 }
 
 export function getAvatarUrl(paymail: string): string {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!apiUrl) {
-    throw new Error("NEXT_PUBLIC_API_URL environment variable is required");
-  }
-  return `${apiUrl}/u/${encodeURIComponent(paymail)}`;
+  // Use relative URL - Next.js rewrites /u/:path* to the backend
+  return `/u/${encodeURIComponent(paymail)}`;
 }

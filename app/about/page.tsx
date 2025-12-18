@@ -41,9 +41,7 @@ export default function AboutPage() {
             Instead of storing the images on a proprietary server, it stores
             them on the Bitcoin blockchain.
           </li>
-          <li>
-            BitPic is open and distributed. Anyone can run a BitPic node.
-          </li>
+          <li>BitPic is open and distributed. Anyone can run a BitPic node.</li>
           <li>
             The images are 100% stored on the Bitcoin blockchain, signed by
             Paymail user identity public key. Images signed with invalid
@@ -96,6 +94,7 @@ OP_RETURN
           <code className="font-mono text-sm text-primary">
             https://bitpic.net/u/644@moneybutton.com
           </code>
+          {/* biome-ignore lint/performance/noImgElement: Dynamic avatar URL from backend */}
           <img
             src="/u/644@moneybutton.com"
             alt="644@moneybutton.com avatar"
@@ -125,7 +124,9 @@ OP_RETURN
             your Paymail, you probably want the avatar to show up forever.
           </li>
           <li>
-            <strong>App developers: No need to roll your own avatar system:</strong>{" "}
+            <strong>
+              App developers: No need to roll your own avatar system:
+            </strong>{" "}
             As an application developer, you don&apos;t need to build a user
             avatar system from scratch. Just start using the avatar by
             referencing{" "}

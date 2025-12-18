@@ -24,7 +24,8 @@ export default function PaymailPage() {
             Get Your @bitpic.net Paymail
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            The universal avatar standard for Bitcoin. Like Gravatar, but on-chain.
+            The universal avatar standard for Bitcoin. Like Gravatar, but
+            on-chain.
           </p>
           <div className="pt-4">
             <Button

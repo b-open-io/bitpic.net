@@ -1,50 +1,60 @@
-import { useQuery } from "@tanstack/react-query";
-import type { AvatarData, FeedResponse } from "@/lib/types";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import type { FeedItem, FeedResponse } from "@/lib/types";
 import { formatRelativeTime, getAvatarUrl } from "@/lib/utils";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-if (!API_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL environment variable is required");
-}
+const PAGE_SIZE = 24;
 
-async function fetchFeed(limit = 50): Promise<FeedResponse> {
-  const response = await fetch(`${API_URL}/api/feed?limit=${limit}`);
+async function fetchFeedPage(offset: number): Promise<FeedResponse> {
+  // Use relative URL - Next.js rewrites /api/feed to the backend
+  const response = await fetch(`/api/feed?offset=${offset}&limit=${PAGE_SIZE}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch feed: ${response.statusText}`);
   }
   return response.json();
 }
 
-interface UseFeedResult {
-  confirmed: AvatarData[];
-  unconfirmed: AvatarData[];
+// Separate query for mempool items (always first page, unconfirmed only)
+async function fetchMempool(): Promise<FeedItem[]> {
+  const response = await fetch("/api/feed?offset=0&limit=50");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch mempool: ${response.statusText}`);
+  }
+  const data: FeedResponse = await response.json();
+  return data.items.filter((item) => item.confirmed === false);
 }
 
-export function useFeed() {
+export function useMempool() {
   return useQuery({
-    queryKey: ["feed"],
-    queryFn: () => fetchFeed(50),
-    refetchInterval: 10000,
-    select: (data): UseFeedResult => {
-      const confirmed = data.items
-        .filter((item) => item.confirmed !== false)
-        .map((item) => ({
-          paymail: item.paymail,
-          imageUrl: item.url || getAvatarUrl(item.paymail),
-          timestamp: formatRelativeTime(item.timestamp),
-          txid: item.txid,
-        }));
-
-      const unconfirmed = data.items
-        .filter((item) => item.confirmed === false)
-        .map((item) => ({
-          paymail: item.paymail,
-          imageUrl: item.url || getAvatarUrl(item.paymail),
-          timestamp: "pending",
-          txid: item.txid,
-        }));
-
-      return { confirmed, unconfirmed };
-    },
+    queryKey: ["mempool"],
+    queryFn: fetchMempool,
+    refetchInterval: 5000, // Check mempool more frequently
   });
+}
+
+export function useInfiniteFeed() {
+  return useInfiniteQuery({
+    queryKey: ["feed"],
+    queryFn: ({ pageParam = 0 }) => fetchFeedPage(pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const nextOffset = lastPage.offset + lastPage.limit;
+      // Only return next page if there are more items
+      if (nextOffset < lastPage.total) {
+        return nextOffset;
+      }
+      return undefined;
+    },
+    refetchInterval: 30000, // Refresh less often for confirmed items
+  });
+}
+
+// Transform feed items into display format
+export function transformFeedItem(item: FeedItem) {
+  return {
+    paymail: item.paymail,
+    imageUrl: item.url || getAvatarUrl(item.paymail),
+    timestamp: item.confirmed ? formatRelativeTime(item.timestamp) : "pending",
+    txid: item.txid,
+    confirmed: item.confirmed,
+  };
 }
