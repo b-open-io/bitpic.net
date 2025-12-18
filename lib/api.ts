@@ -157,7 +157,7 @@ export class BitPicAPI {
   ): Promise<PaymailAvailableResponse> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/api/paymail/available/${encodeURIComponent(handle)}`,
+        `${this.baseUrl}/api/paymail/${encodeURIComponent(handle)}/available`,
       );
       if (!response.ok) {
         throw new Error(
