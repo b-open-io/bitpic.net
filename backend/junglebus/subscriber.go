@@ -119,8 +119,10 @@ func (s *Subscriber) onStatus(status *models.ControlResponse) {
 	case "block-done":
 		s.lastBlock = uint64(status.Block)
 		s.lastBlockTime = time.Now()
-		// Save progress every block (silently)
+		// Save progress every block
 		s.redis.SetLastBlock(uint64(status.Block))
+		// Log block completion
+		log.Printf("Block %d done", status.Block)
 	case "error":
 		log.Printf("JungleBus error: %s", status.Message)
 	}
