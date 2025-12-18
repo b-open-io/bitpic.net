@@ -29,6 +29,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   const [handleError, setHandleError] = useState("");
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const { isConnected, connect, address, pubKey, ordAddress, identityAddress } =
     useWallet();
 
@@ -38,6 +39,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
     setHandleError("");
     setIsCheckingAvailability(false);
     setIsRegistering(false);
+    setIsConnecting(false);
   };
 
   const handleClose = (open: boolean) => {
@@ -80,16 +82,21 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
 
   const handleWalletConnect = async () => {
     if (!isConnected) {
+      setIsConnecting(true);
       try {
         await connect();
-        // After connecting, stay on wallet step to show addresses
+        // State will update and component will re-render
+        // User will then see addresses and can click "Register Paymail"
       } catch (error) {
         console.error("Failed to connect wallet:", error);
+        setHandleError("Failed to connect wallet. Please try again.");
+      } finally {
+        setIsConnecting(false);
       }
-      return;
+    } else {
+      // Already connected - proceed to register
+      await registerPaymail();
     }
-    // Already connected - proceed to register
-    await registerPaymail();
   };
 
   const registerPaymail = async () => {
@@ -250,10 +257,19 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
               </Button>
               <Button
                 onClick={handleWalletConnect}
-                disabled={isRegistering}
+                disabled={isRegistering || isConnecting}
                 className="w-full"
               >
-                {isConnected ? "Register Paymail" : "Connect Wallet"}
+                {isConnecting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Connecting...
+                  </>
+                ) : isConnected ? (
+                  "Register Paymail"
+                ) : (
+                  "Connect Wallet"
+                )}
               </Button>
             </DialogFooter>
           </>
