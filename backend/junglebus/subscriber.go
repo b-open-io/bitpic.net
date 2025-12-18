@@ -114,20 +114,33 @@ func (s *Subscriber) onMempool(tx *models.TransactionResponse) {
 // onStatus handles status updates
 func (s *Subscriber) onStatus(status *models.ControlResponse) {
 	if status.StatusCode == 200 {
-		s.syncing = false
-		log.Printf("JungleBus sync complete at block %d", status.Block)
+		// 200 = block processed, only log when catching up to tip
+		if s.syncing {
+			s.syncing = false
+			log.Printf("JungleBus caught up to tip at block %d", status.Block)
+			// Persist when we reach tip
+			if err := s.redis.SetLastBlock(uint64(status.Block)); err != nil {
+				log.Printf("Warning: failed to persist last block: %v", err)
+			}
+		}
 	} else if status.StatusCode == 100 {
-		s.syncing = true
+		// 100 = still syncing
+		if !s.syncing {
+			s.syncing = true
+			log.Printf("JungleBus syncing from block %d", status.Block)
+		}
 	}
 
-	// Update last block
+	// Update last block silently
 	if status.Block > 0 {
 		s.lastBlock = uint64(status.Block)
 		s.lastBlockTime = time.Now()
 
-		// Persist to Redis
-		if err := s.redis.SetLastBlock(uint64(status.Block)); err != nil {
-			log.Printf("Warning: failed to persist last block: %v", err)
+		// Persist to Redis periodically (every 1000 blocks to reduce writes)
+		if status.Block%1000 == 0 {
+			if err := s.redis.SetLastBlock(uint64(status.Block)); err != nil {
+				log.Printf("Warning: failed to persist last block: %v", err)
+			}
 		}
 	}
 }
