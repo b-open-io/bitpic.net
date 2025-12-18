@@ -120,7 +120,7 @@ export interface ImageValidation {
 
 export function validateImage(
   base64Data: string,
-  maxSizeMB = 1,
+  maxSizeMB = 10, // Allow larger initial uploads - compression happens after crop
 ): ImageValidation {
   // Extract mime type from data URL
   const mimeMatch = base64Data.match(/^data:(image\/(?:png|jpeg));base64,/);

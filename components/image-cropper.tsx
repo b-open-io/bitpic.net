@@ -102,8 +102,11 @@ export function ImageCropper({
   );
 }
 
+const MAX_SIZE_BYTES = 1024 * 1024; // 1MB limit
+const MAX_DIMENSION = 512; // Max width/height for avatar
+
 /**
- * Crop image to specified area and return as base64
+ * Crop and optimize image to fit under size limit
  */
 async function getCroppedImage(
   imageSrc: string,
@@ -117,11 +120,24 @@ async function getCroppedImage(
     throw new Error("Failed to get canvas context");
   }
 
-  // Set canvas size to the cropped area
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  // Calculate output size - scale down if needed
+  let outputWidth = pixelCrop.width;
+  let outputHeight = pixelCrop.height;
 
-  // Draw the cropped image
+  if (outputWidth > MAX_DIMENSION || outputHeight > MAX_DIMENSION) {
+    const scale = MAX_DIMENSION / Math.max(outputWidth, outputHeight);
+    outputWidth = Math.round(outputWidth * scale);
+    outputHeight = Math.round(outputHeight * scale);
+  }
+
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
+
+  // Use better image smoothing for downscaling
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  // Draw the cropped and scaled image
   ctx.drawImage(
     image,
     pixelCrop.x,
@@ -130,11 +146,58 @@ async function getCroppedImage(
     pixelCrop.height,
     0,
     0,
-    pixelCrop.width,
-    pixelCrop.height,
+    outputWidth,
+    outputHeight,
   );
 
-  // Convert to base64
+  // Try to get under size limit by reducing quality
+  return compressToFit(canvas);
+}
+
+/**
+ * Compress image to fit under MAX_SIZE_BYTES
+ */
+async function compressToFit(canvas: HTMLCanvasElement): Promise<string> {
+  // Try JPEG first (usually smaller)
+  const formats: Array<{ type: string; qualities: number[] }> = [
+    { type: "image/jpeg", qualities: [0.92, 0.85, 0.75, 0.65, 0.5, 0.4] },
+    { type: "image/png", qualities: [1] }, // PNG doesn't have quality, but try as fallback
+  ];
+
+  for (const format of formats) {
+    for (const quality of format.qualities) {
+      const result = await canvasToDataURL(canvas, format.type, quality);
+      const sizeBytes = getBase64Size(result);
+
+      if (sizeBytes <= MAX_SIZE_BYTES) {
+        console.log(
+          `Image compressed to ${(sizeBytes / 1024).toFixed(1)}KB with ${format.type} @ ${quality}`,
+        );
+        return result;
+      }
+    }
+  }
+
+  // If still too large, scale down the canvas and try again
+  const smallerCanvas = document.createElement("canvas");
+  const ctx = smallerCanvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+
+  smallerCanvas.width = Math.round(canvas.width * 0.75);
+  smallerCanvas.height = Math.round(canvas.height * 0.75);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(canvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
+
+  // Recursive call with smaller canvas
+  return compressToFit(smallerCanvas);
+}
+
+function canvasToDataURL(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality: number,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -143,16 +206,19 @@ async function getCroppedImage(
           return;
         }
         const reader = new FileReader();
-        reader.onloadend = () => {
-          resolve(reader.result as string);
-        };
+        reader.onloadend = () => resolve(reader.result as string);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       },
-      "image/png",
-      0.95,
+      type,
+      quality,
     );
   });
+}
+
+function getBase64Size(base64: string): number {
+  const base64Data = base64.replace(/^data:image\/\w+;base64,/, "");
+  return Math.ceil((base64Data.length * 3) / 4);
 }
 
 /**
