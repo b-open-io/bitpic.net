@@ -35,8 +35,9 @@ type Subscriber struct {
 }
 
 const (
-	logInterval    = 10 * time.Second // Log stats every 10 seconds
-	logBlocksEvery = 1000             // Or every 1000 blocks
+	logInterval      = 10 * time.Second // Log stats every 10 seconds
+	logBlocksEvery   = 1000             // Or every 1000 blocks
+	bitpicStartBlock = 610255           // First BitPic transaction block - never sync before this
 )
 
 // NewSubscriber creates a new JungleBus subscriber
@@ -60,19 +61,17 @@ func (s *Subscriber) Start() error {
 	}
 	s.client = client
 
-	// Get last block from Redis, never go below minimum
-	const minFromBlock uint64 = 600000 // BitPic genesis block - never sync before this
-
+	// Get last block from Redis, never go below BitPic start block
 	lastBlock, err := s.redis.GetLastBlock()
 	if err != nil {
 		log.Printf("Warning: failed to get last block from Redis: %v", err)
-		lastBlock = minFromBlock
+		lastBlock = bitpicStartBlock
 	}
 
-	// Always use at least minFromBlock - never sync earlier blocks
-	if lastBlock < minFromBlock {
-		log.Printf("Stored block %d is before genesis, starting from %d", lastBlock, minFromBlock)
-		lastBlock = minFromBlock
+	// Always use at least bitpicStartBlock - never sync earlier blocks
+	if lastBlock < bitpicStartBlock {
+		log.Printf("Stored block %d is before BitPic genesis, starting from %d", lastBlock, bitpicStartBlock)
+		lastBlock = bitpicStartBlock
 	} else {
 		log.Printf("Resuming from block %d", lastBlock)
 	}
