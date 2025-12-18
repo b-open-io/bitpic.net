@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import type { Area, Point } from "react-easy-crop";
 import Cropper from "react-easy-crop";
+import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 
 interface ImageCropperProps {
@@ -52,7 +53,7 @@ export function ImageCropper({
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      <div className="relative h-96 bg-black rounded-lg overflow-hidden">
+      <div className="relative h-96 bg-muted rounded-lg overflow-hidden">
         <Cropper
           image={image}
           crop={crop}
@@ -81,22 +82,17 @@ export function ImageCropper({
 
       <div className="flex gap-2 justify-end">
         {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 border rounded-md hover:bg-gray-50"
-          >
+          <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
           onClick={handleCropComplete}
           disabled={isProcessing || !croppedAreaPixels}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isProcessing ? "Processing..." : "Crop Image"}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { Check, ImageIcon, Loader2, Mail, Shield, Wallet } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PaymailRegister } from "@/components/paymail-register";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,16 +22,7 @@ export default function PaymailPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // Check if user already has a registered paymail
-  useEffect(() => {
-    if (isConnected && pubKey) {
-      checkExistingPaymail();
-    } else {
-      setExistingPaymail(null);
-    }
-  }, [isConnected, pubKey]);
-
-  const checkExistingPaymail = async () => {
+  const checkExistingPaymail = useCallback(async () => {
     if (!pubKey) return;
 
     setIsLoading(true);
@@ -48,7 +39,16 @@ export default function PaymailPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pubKey]);
+
+  // Check if user already has a registered paymail
+  useEffect(() => {
+    if (isConnected && pubKey) {
+      checkExistingPaymail();
+    } else {
+      setExistingPaymail(null);
+    }
+  }, [isConnected, pubKey, checkExistingPaymail]);
 
   const handleConnect = async () => {
     setIsConnecting(true);

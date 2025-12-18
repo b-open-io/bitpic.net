@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ImageCropper } from "@/components/image-cropper";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import type {
   BitPicRefTransactionData,
@@ -25,8 +28,8 @@ import {
 import type { Ordinal } from "@/lib/use-wallet";
 import { useWallet } from "@/lib/use-wallet";
 
-type Step = "upload" | "crop" | "connect" | "sign" | "success";
-type SourceMode = "upload" | "ordinal";
+type Step = "select" | "crop" | "confirm" | "sign" | "success";
+type SourceMode = "upload" | "onchain";
 
 interface UploadDialogProps {
   onClose?: () => void;
@@ -43,7 +46,8 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     ordinals,
     refreshOrdinals,
   } = useWallet();
-  const [step, setStep] = useState<Step>("upload");
+
+  const [step, setStep] = useState<Step>("select");
   const [sourceMode, setSourceMode] = useState<SourceMode>("upload");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
@@ -52,8 +56,9 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [txid, setTxid] = useState<string | null>(null);
-  const [loadingProfileImage, setLoadingProfileImage] = useState(false);
   const [loadingOrdinals, setLoadingOrdinals] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filter ordinals to only show images
   const imageOrdinals = ordinals.filter((o) => {
@@ -61,52 +66,10 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     return fileType.startsWith("image/");
   });
 
-  // Load profile image from wallet social profile on mount
-  useEffect(() => {
-    if (socialProfile?.avatar && step === "upload" && !selectedImage) {
-      loadProfileImage(socialProfile.avatar);
-    }
-  }, [socialProfile?.avatar, step, selectedImage]);
-
-  const loadProfileImage = async (avatarUrl: string) => {
-    setLoadingProfileImage(true);
-    try {
-      const response = await fetch(avatarUrl);
-      if (!response.ok) throw new Error("Failed to fetch profile image");
-
-      const blob = await response.blob();
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        const validation = validateImage(result);
-
-        if (validation.valid) {
-          setSelectedImage(result);
-          setStep("crop");
-        }
-        setLoadingProfileImage(false);
-      };
-      reader.onerror = () => setLoadingProfileImage(false);
-      reader.readAsDataURL(blob);
-    } catch (err) {
-      console.error("Failed to load profile image:", err);
-      setLoadingProfileImage(false);
-    }
-  };
-
-  // Look up paymail when wallet connects
-  useEffect(() => {
-    if (isConnected && pubKey && step === "connect") {
-      lookupPaymail();
-    }
-  }, [isConnected, pubKey, step]);
-
-  const lookupPaymail = async () => {
+  const lookupPaymail = useCallback(async () => {
     if (!pubKey) return;
-
     setIsLoading(true);
     setError(null);
-
     try {
       const result = await api.lookupPaymailByPubkey(pubKey);
       if (result.found && result.paymail) {
@@ -120,7 +83,14 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pubKey]);
+
+  // Look up paymail when wallet connects and we're on confirm step
+  useEffect(() => {
+    if (isConnected && pubKey && step === "confirm") {
+      lookupPaymail();
+    }
+  }, [isConnected, pubKey, step, lookupPaymail]);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,8 +121,19 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     [],
   );
 
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
 
@@ -178,25 +159,89 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  }, []);
+  const handleUseProfileImage = async () => {
+    if (!socialProfile?.avatar) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch(socialProfile.avatar);
+      if (!response.ok) throw new Error("Failed to fetch profile image");
+
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        const validation = validateImage(result);
+
+        if (validation.valid) {
+          setSelectedImage(result);
+          setStep("crop");
+        } else {
+          setError(validation.error || "Invalid image format");
+        }
+        setIsLoading(false);
+      };
+      reader.onerror = () => {
+        setError("Failed to load profile image");
+        setIsLoading(false);
+      };
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      console.error("Failed to load profile image:", err);
+      setError("Failed to load profile image");
+      setIsLoading(false);
+    }
+  };
 
   const handleCropComplete = useCallback((cropped: string) => {
     setCroppedImage(cropped);
-    setStep("connect");
+    setStep("confirm");
   }, []);
+
+  const handleCropCancel = useCallback(() => {
+    setSelectedImage(null);
+    setStep("select");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);
+
+  const handleSelectOrdinal = (ordinal: Ordinal) => {
+    setSelectedOrdinal(ordinal);
+    setStep("confirm");
+  };
 
   const handleConnect = async () => {
     setIsLoading(true);
     setError(null);
     try {
       await connect();
-      // lookupPaymail will be called by useEffect when isConnected changes
     } catch (err) {
       setError("Failed to connect wallet");
       console.error(err);
+    } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTabChange = async (value: string) => {
+    setSourceMode(value as SourceMode);
+    setSelectedOrdinal(null);
+    setSelectedImage(null);
+    setCroppedImage(null);
+    setError(null);
+
+    if (value === "onchain" && ordinals.length === 0 && isConnected) {
+      setLoadingOrdinals(true);
+      await refreshOrdinals();
+      setLoadingOrdinals(false);
+    }
+  };
+
+  const handleBack = () => {
+    if (sourceMode === "onchain") {
+      setSelectedOrdinal(null);
+      setStep("select");
+    } else {
+      setStep("crop");
+      setCroppedImage(null);
     }
   };
 
@@ -206,14 +251,12 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
       return;
     }
 
-    // For upload mode, we need a cropped image
-    // For ordinal mode, we need a selected ordinal
     if (sourceMode === "upload" && !croppedImage) {
       setError("Missing cropped image");
       return;
     }
-    if (sourceMode === "ordinal" && !selectedOrdinal) {
-      setError("No ordinal selected");
+    if (sourceMode === "onchain" && !selectedOrdinal) {
+      setError("No image selected");
       return;
     }
 
@@ -224,10 +267,8 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     try {
       let opReturnData: string[];
 
-      if (sourceMode === "ordinal" && selectedOrdinal) {
-        // Ordinal reference mode - sign the ordinal reference
+      if (sourceMode === "onchain" && selectedOrdinal) {
         const ordinalRef = selectedOrdinal.origin;
-
         const signedMessage = await wallet.signMessage({
           message: ordinalRef,
           encoding: "utf8",
@@ -246,17 +287,16 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
         opReturnData = buildBitPicRefOpReturn(txData);
       } else {
-        // Upload mode - sign the image hash and embed image
-        const validation = validateImage(croppedImage!);
+        if (!croppedImage) {
+          throw new Error("Missing cropped image");
+        }
+
+        const validation = validateImage(croppedImage);
         if (!validation.valid || !validation.mimeType) {
           throw new Error(validation.error || "Invalid image");
         }
 
-        // Compute SHA256 hash of image bytes for signing
-        const base64Data = croppedImage!.replace(
-          /^data:image\/\w+;base64,/,
-          "",
-        );
+        const base64Data = croppedImage.replace(/^data:image\/\w+;base64,/, "");
         const binaryString = atob(base64Data);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -268,7 +308,6 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
 
-        // Sign the image hash
         const signedMessage = await wallet.signMessage({
           message: imageHash,
           encoding: "utf8",
@@ -282,14 +321,13 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           paymail,
           publicKey: pubKey,
           signature: signedMessage.sig,
-          imageData: croppedImage!,
+          imageData: croppedImage,
           mimeType: validation.mimeType,
         };
 
         opReturnData = buildBitPicOpReturn(txData);
       }
 
-      // Broadcast using Yours Wallet
       const result = await wallet.sendBsv([
         {
           satoshis: 0,
@@ -309,313 +347,296 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         err instanceof Error ? err.message : "Failed to sign and broadcast",
       );
       console.error("Error signing and broadcasting:", err);
-      setStep("connect");
+      setStep("confirm");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const getStepTitle = () => {
+    switch (step) {
+      case "select":
+        return "Choose Avatar";
+      case "crop":
+        return "Crop Avatar";
+      case "confirm":
+        return "Confirm Upload";
+      case "sign":
+        return "Broadcasting";
+      case "success":
+        return "Success!";
+    }
+  };
+
+  const getStepDescription = () => {
+    switch (step) {
+      case "select":
+        return "Upload an image or select from your wallet";
+      case "crop":
+        return "Adjust the crop area for your avatar";
+      case "confirm":
+        return "Review and upload to Bitcoin";
+      case "sign":
+        return "Signing and broadcasting to Bitcoin...";
+      case "success":
+        return "Your avatar is now on the blockchain";
+    }
+  };
+
+  const previewImage =
+    sourceMode === "onchain" && selectedOrdinal
+      ? getOrdfsUrl(selectedOrdinal.origin)
+      : croppedImage;
+
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>
-          {step === "upload" && "Upload Avatar"}
-          {step === "crop" && "Crop Avatar"}
-          {step === "connect" && "Connect & Upload"}
-          {step === "sign" && "Sign & Broadcast"}
-          {step === "success" && "Success!"}
-        </CardTitle>
-        <CardDescription>
-          {step === "upload" && "Choose an image for your BitPic avatar"}
-          {step === "crop" && "Adjust your avatar crop and zoom"}
-          {step === "connect" && "Connect your wallet to upload"}
-          {step === "sign" && "Signing and broadcasting to Bitcoin..."}
-          {step === "success" && "Your avatar has been uploaded to Bitcoin"}
-        </CardDescription>
+        <CardTitle>{getStepTitle()}</CardTitle>
+        <CardDescription>{getStepDescription()}</CardDescription>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="min-h-[400px]">
         {error && (
           <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm">
             {error}
           </div>
         )}
 
-        {step === "upload" && (
-          <div className="space-y-4">
-            {/* Mode toggle */}
-            <div className="flex gap-2 p-1 bg-muted rounded-lg">
-              <button
-                type="button"
-                onClick={() => {
-                  setSourceMode("upload");
-                  setSelectedOrdinal(null);
-                }}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  sourceMode === "upload"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Upload Image
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  setSourceMode("ordinal");
-                  setSelectedImage(null);
-                  setCroppedImage(null);
-                  if (ordinals.length === 0 && isConnected) {
-                    setLoadingOrdinals(true);
-                    await refreshOrdinals();
-                    setLoadingOrdinals(false);
+        {/* STEP: SELECT */}
+        {step === "select" && (
+          <Tabs
+            value={sourceMode}
+            onValueChange={handleTabChange}
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="upload">Upload Image</TabsTrigger>
+              <TabsTrigger value="onchain">On-Chain Image</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="upload" className="space-y-4 mt-0">
+              {/* Profile image option */}
+              {socialProfile?.avatar && (
+                <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-muted/30">
+                  {/* biome-ignore lint/performance/noImgElement: Dynamic external URL from wallet */}
+                  <img
+                    src={socialProfile.avatar}
+                    alt="Profile"
+                    className="w-12 h-12 rounded-full object-cover border border-border"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {socialProfile.displayName || "Profile Image"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Use your current wallet profile
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleUseProfileImage}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Loading..." : "Use"}
+                  </Button>
+                </div>
+              )}
+
+              {/* Drop zone - div required for drag-and-drop */}
+              {/* biome-ignore lint/a11y/useSemanticElements: div needed for drag-and-drop target */}
+              <div
+                role="button"
+                tabIndex={0}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
                   }
                 }}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  sourceMode === "ordinal"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer ${
+                  isDragging
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-muted-foreground hover:bg-muted/50"
                 }`}
               >
-                Use On-Chain Image
-              </button>
-            </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/png,image/jpeg"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <div className="bg-primary/10 p-4 rounded-full mx-auto w-fit mb-4">
+                  <svg
+                    className="w-8 h-8 text-primary"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <title>Upload</title>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                </div>
+                <p className="text-sm font-medium text-foreground">
+                  Click to upload or drag & drop
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  PNG or JPEG up to 1MB
+                </p>
+              </div>
+            </TabsContent>
 
-            {sourceMode === "upload" ? (
-              loadingProfileImage ? (
-                <div className="text-center py-8">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2" />
+            <TabsContent value="onchain" className="mt-0">
+              {!isConnected ? (
+                <div className="h-[280px] flex flex-col items-center justify-center text-center p-4 border border-dashed border-border rounded-lg">
+                  <div className="bg-muted p-4 rounded-full mb-4">
+                    <svg
+                      className="w-8 h-8 text-muted-foreground"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <title>Wallet</title>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Connect your wallet to browse on-chain images
+                  </p>
+                  <Button onClick={handleConnect} disabled={isLoading}>
+                    {isLoading ? "Connecting..." : "Connect Wallet"}
+                  </Button>
+                </div>
+              ) : loadingOrdinals ? (
+                <div className="h-[280px]">
+                  <div className="grid grid-cols-4 gap-3">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <Skeleton key={i} className="aspect-square rounded-lg" />
+                    ))}
+                  </div>
+                </div>
+              ) : imageOrdinals.length === 0 ? (
+                <div className="h-[280px] flex flex-col items-center justify-center text-center p-4 border border-dashed border-border rounded-lg">
+                  <div className="bg-muted p-4 rounded-full mb-4">
+                    <svg
+                      className="w-8 h-8 text-muted-foreground"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <title>No images</title>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+                      />
+                    </svg>
+                  </div>
                   <p className="text-sm text-muted-foreground">
-                    Loading your profile image...
+                    No images found in your wallet
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Try uploading an image instead
                   </p>
                 </div>
               ) : (
-                <>
-                  {socialProfile?.avatar && (
-                    <div className="flex flex-col items-center gap-3 p-4 bg-muted/30 rounded-lg">
-                      <img
-                        src={socialProfile.avatar}
-                        alt="Current profile"
-                        className="w-20 h-20 rounded-full object-cover"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        {socialProfile.displayName
-                          ? `Use ${socialProfile.displayName}'s profile image`
-                          : "Use your current profile image"}
-                      </p>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => loadProfileImage(socialProfile.avatar!)}
+                <ScrollArea className="h-[280px]">
+                  <div className="grid grid-cols-4 gap-3 pr-4">
+                    {imageOrdinals.map((ordinal) => (
+                      <button
+                        key={ordinal.origin}
+                        type="button"
+                        onClick={() => handleSelectOrdinal(ordinal)}
+                        className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                          selectedOrdinal?.origin === ordinal.origin
+                            ? "border-primary ring-2 ring-primary/20"
+                            : "border-border hover:border-muted-foreground"
+                        }`}
                       >
-                        Use This Image
-                      </Button>
-                    </div>
-                  )}
-                  <section
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-muted-foreground transition-colors cursor-pointer"
-                    aria-label="File drop zone"
-                  >
-                    <input
-                      type="file"
-                      id="file-upload"
-                      accept="image/png,image/jpeg"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                      <div className="space-y-2">
-                        <svg
-                          className="mx-auto h-12 w-12 text-muted-foreground"
-                          stroke="currentColor"
-                          fill="none"
-                          viewBox="0 0 48 48"
-                          aria-hidden="true"
-                        >
-                          <title>Upload Icon</title>
-                          <path
-                            d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        <div className="text-muted-foreground">
-                          <span className="font-medium text-primary hover:text-primary/80">
-                            {socialProfile?.avatar
-                              ? "Or click to upload a different image"
-                              : "Click to upload"}
-                          </span>{" "}
-                          {!socialProfile?.avatar && "or drag and drop"}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          PNG or JPEG up to 1MB
-                        </p>
-                      </div>
-                    </label>
-                  </section>
-                </>
-              )
-            ) : (
-              /* Ordinal selection mode */
-              <div className="space-y-4">
-                {!isConnected ? (
-                  <div className="text-center py-8 space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Connect your wallet to see your on-chain images
-                    </p>
-                    <Button onClick={handleConnect} disabled={isLoading}>
-                      {isLoading ? "Connecting..." : "Connect Wallet"}
-                    </Button>
+                        {/* biome-ignore lint/performance/noImgElement: Dynamic ORDFS URL */}
+                        <img
+                          src={getOrdfsUrl(ordinal.origin)}
+                          alt="Selectable avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
                   </div>
-                ) : loadingOrdinals ? (
-                  <div className="text-center py-8">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Loading your on-chain images...
-                    </p>
-                  </div>
-                ) : imageOrdinals.length === 0 ? (
-                  <div className="text-center py-8 space-y-2">
-                    <p className="text-muted-foreground">
-                      No on-chain images found in your wallet
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Upload an image instead or inscribe some first
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      Select an on-chain image to use as your avatar
-                    </p>
-                    <div className="grid grid-cols-4 gap-3 max-h-64 overflow-y-auto p-1">
-                      {imageOrdinals.map((ordinal) => (
-                        <button
-                          key={ordinal.origin}
-                          type="button"
-                          onClick={() => setSelectedOrdinal(ordinal)}
-                          className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                            selectedOrdinal?.origin === ordinal.origin
-                              ? "border-primary ring-2 ring-primary/20"
-                              : "border-border hover:border-muted-foreground"
-                          }`}
-                        >
-                          <img
-                            src={getOrdfsUrl(ordinal.origin)}
-                            alt="Ordinal"
-                            className="w-full h-full object-cover"
-                          />
-                          {selectedOrdinal?.origin === ordinal.origin && (
-                            <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-                              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                                <svg
-                                  className="w-4 h-4 text-primary-foreground"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <title>Selected</title>
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M5 13l4 4L19 7"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                    {selectedOrdinal && (
-                      <Button
-                        onClick={() => setStep("connect")}
-                        className="w-full"
-                      >
-                        Continue with Selected Image
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+                </ScrollArea>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
 
+        {/* STEP: CROP */}
         {step === "crop" && selectedImage && (
           <ImageCropper
             image={selectedImage}
             onCropComplete={handleCropComplete}
-            onCancel={() => {
-              setStep("upload");
-              setSelectedImage(null);
-            }}
+            onCancel={handleCropCancel}
           />
         )}
 
-        {step === "connect" && (
-          <div className="space-y-4">
-            {/* Preview - show cropped image for upload mode, ordinal for ordinal mode */}
-            <div className="flex justify-center mb-4">
-              {sourceMode === "ordinal" && selectedOrdinal ? (
+        {/* STEP: CONFIRM */}
+        {step === "confirm" && (
+          <div className="space-y-6">
+            {/* Preview */}
+            <div className="flex justify-center">
+              {previewImage && (
+                /* biome-ignore lint/performance/noImgElement: Dynamic preview from crop or ORDFS */
                 <img
-                  src={getOrdfsUrl(selectedOrdinal.origin)}
-                  alt="Selected ordinal preview"
-                  className="w-32 h-32 rounded-full object-cover"
+                  src={previewImage}
+                  alt="Avatar preview"
+                  className="w-32 h-32 rounded-full object-cover border-4 border-border"
                 />
-              ) : croppedImage ? (
-                <img
-                  src={croppedImage}
-                  alt="Cropped avatar preview"
-                  className="w-32 h-32 rounded-full object-cover"
-                />
-              ) : null}
+              )}
             </div>
 
             {!isConnected ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground text-center">
+              <div className="text-center space-y-4">
+                <p className="text-sm text-muted-foreground">
                   Connect your Yours Wallet to continue
                 </p>
-                <Button
-                  onClick={handleConnect}
-                  disabled={isLoading}
-                  className="w-full"
-                >
+                <Button onClick={handleConnect} disabled={isLoading}>
                   {isLoading ? "Connecting..." : "Connect Wallet"}
                 </Button>
               </div>
             ) : isLoading ? (
               <div className="text-center py-4">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2" />
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-2" />
                 <p className="text-sm text-muted-foreground">
                   Looking up your paymail...
                 </p>
               </div>
             ) : paymail ? (
               <div className="space-y-4">
-                <div className="rounded-sm border border-border/40 bg-muted/50 p-4">
+                <div className="rounded-lg border border-border bg-muted/30 p-4 text-center">
                   <p className="text-xs text-muted-foreground mb-1">
                     Uploading as
                   </p>
-                  <p className="font-mono text-sm">{paymail}</p>
+                  <p className="font-mono text-sm font-medium">{paymail}</p>
                 </div>
 
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      if (sourceMode === "ordinal") {
-                        setStep("upload");
-                      } else {
-                        setStep("crop");
-                        setCroppedImage(null);
-                      }
-                    }}
+                    onClick={handleBack}
                     className="flex-1"
                   >
                     Back
@@ -625,7 +646,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                     disabled={isLoading}
                     className="flex-1"
                   >
-                    {sourceMode === "ordinal"
+                    {sourceMode === "onchain"
                       ? "Link to Bitcoin"
                       : "Upload to Bitcoin"}
                   </Button>
@@ -633,7 +654,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
               </div>
             ) : (
               <div className="space-y-4 text-center">
-                <div className="rounded-sm border border-amber-500/40 bg-amber-500/10 p-4">
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                   <p className="text-sm text-foreground mb-2">
                     You need a @bitpic.net paymail to upload avatars
                   </p>
@@ -644,14 +665,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      if (sourceMode === "ordinal") {
-                        setStep("upload");
-                      } else {
-                        setStep("crop");
-                        setCroppedImage(null);
-                      }
-                    }}
+                    onClick={handleBack}
                     className="flex-1"
                   >
                     Back
@@ -665,11 +679,12 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           </div>
         )}
 
+        {/* STEP: SIGN */}
         {step === "sign" && (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4" />
-            <p className="text-muted-foreground">
-              Signing and broadcasting transaction...
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-2 border-primary border-t-transparent mb-4" />
+            <p className="text-foreground font-medium">
+              Signing and broadcasting...
             </p>
             <p className="text-sm text-muted-foreground mt-2">
               Please confirm in your wallet
@@ -677,26 +692,22 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           </div>
         )}
 
+        {/* STEP: SUCCESS */}
         {step === "success" && txid && (
-          <div className="text-center space-y-4 py-4">
-            <div className="flex justify-center mb-4">
-              {sourceMode === "ordinal" && selectedOrdinal ? (
+          <div className="text-center space-y-6 py-4">
+            <div className="flex justify-center">
+              {previewImage && (
+                /* biome-ignore lint/performance/noImgElement: Dynamic preview from crop or ORDFS */
                 <img
-                  src={getOrdfsUrl(selectedOrdinal.origin)}
-                  alt="Linked ordinal avatar"
-                  className="w-32 h-32 rounded-full object-cover"
-                />
-              ) : croppedImage ? (
-                <img
-                  src={croppedImage}
+                  src={previewImage}
                   alt="Uploaded avatar"
-                  className="w-32 h-32 rounded-full object-cover"
+                  className="w-32 h-32 rounded-full object-cover border-4 border-primary/20"
                 />
-              ) : null}
+              )}
             </div>
             <div className="space-y-2">
-              <p className="text-primary font-medium">
-                {sourceMode === "ordinal"
+              <p className="text-primary font-medium text-lg">
+                {sourceMode === "onchain"
                   ? "Avatar linked successfully!"
                   : "Avatar uploaded successfully!"}
               </p>
@@ -705,10 +716,10 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                   Linked to <span className="font-mono">{paymail}</span>
                 </p>
               )}
-              <p className="text-sm text-muted-foreground mt-4">
-                Transaction ID:
-              </p>
-              <code className="block text-xs bg-muted p-2 rounded break-all font-mono">
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Transaction ID</p>
+              <code className="block text-xs bg-muted p-3 rounded-lg break-all font-mono">
                 {txid}
               </code>
             </div>
