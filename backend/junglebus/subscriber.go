@@ -5,10 +5,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/GorillaPool/go-junglebus"
-	"github.com/GorillaPool/go-junglebus/models"
 	"github.com/b-open-io/bitpic/bitpic"
 	"github.com/b-open-io/bitpic/storage"
+	"github.com/b-open-io/go-junglebus"
+	"github.com/b-open-io/go-junglebus/models"
 )
 
 // Subscriber handles JungleBus subscription and transaction processing
@@ -71,16 +71,12 @@ func (s *Subscriber) Start() error {
 		OnError:       s.onError,
 	}
 
-	// Subscribe with queue for better performance
-	subscription, err := client.SubscribeWithQueue(
+	// Subscribe to the stream
+	subscription, err := client.Subscribe(
 		context.Background(),
 		s.subscriptionID,
 		lastBlock,
-		0, // Use server default queue
 		eventHandler,
-		&junglebus.SubscribeOptions{
-			QueueSize: 10000,
-		},
 	)
 	if err != nil {
 		return err
@@ -90,7 +86,7 @@ func (s *Subscriber) Start() error {
 	s.connected = true
 	s.syncing = true
 
-	log.Println("Connected to JungleBus, listening for transactions...")
+	log.Println("Subscribed to JungleBus, listening for transactions...")
 
 	// Block forever - the subscription runs in its own goroutine
 	select {}
@@ -113,30 +109,28 @@ func (s *Subscriber) onMempool(tx *models.TransactionResponse) {
 
 // onStatus handles status updates
 func (s *Subscriber) onStatus(status *models.ControlResponse) {
-	// Log status changes
-	if status.StatusCode == 200 && s.syncing {
-		s.syncing = false
-		log.Printf("JungleBus status 200 at block %d (historical sync complete)", status.Block)
-		// Persist block
-		if err := s.redis.SetLastBlock(uint64(status.Block)); err != nil {
-			log.Printf("Warning: failed to persist last block: %v", err)
-		}
-	} else if status.StatusCode == 100 && !s.syncing {
-		s.syncing = true
-		log.Printf("JungleBus status 100 at block %d (syncing)", status.Block)
-	}
-
-	// Update last block
-	if status.Block > 0 {
+	switch status.Status {
+	case "connected":
+		s.connected = true
+		log.Printf("JungleBus connected")
+	case "disconnected":
+		s.connected = false
+		log.Printf("JungleBus disconnected")
+	case "block-done":
 		s.lastBlock = uint64(status.Block)
 		s.lastBlockTime = time.Now()
-
-		// Persist to Redis periodically (every 1000 blocks to reduce writes)
-		if status.Block%1000 == 0 {
+		// Save progress periodically
+		if status.Block%100 == 0 {
 			if err := s.redis.SetLastBlock(uint64(status.Block)); err != nil {
-				log.Printf("Warning: failed to persist last block: %v", err)
+				log.Printf("Warning: failed to persist block %d: %v", status.Block, err)
+			} else {
+				log.Printf("Block %d done", status.Block)
 			}
 		}
+	case "error":
+		log.Printf("JungleBus error: %s", status.Message)
+	default:
+		log.Printf("JungleBus status: %s at block %d", status.Status, status.Block)
 	}
 }
 
@@ -148,17 +142,6 @@ func (s *Subscriber) onError(err error) {
 
 // processTransaction processes a transaction from JungleBus
 func (s *Subscriber) processTransaction(tx *models.TransactionResponse, confirmed bool) {
-	// Update last block info if this is a confirmed transaction
-	if confirmed && tx.BlockHeight > 0 {
-		s.lastBlock = uint64(tx.BlockHeight)
-		s.lastBlockTime = time.Unix(int64(tx.BlockTime), 0)
-
-		// Persist to Redis
-		if err := s.redis.SetLastBlock(uint64(tx.BlockHeight)); err != nil {
-			log.Printf("Warning: failed to persist last block: %v", err)
-		}
-	}
-
 	// Transaction is already bytes from JungleBus
 	txBytes := tx.Transaction
 
@@ -186,5 +169,5 @@ func (s *Subscriber) processTransaction(tx *models.TransactionResponse, confirme
 	if confirmed {
 		status = "confirmed"
 	}
-	log.Printf("New BitPic avatar (%s): %s -> %s", status, data.Paymail, data.Outpoint)
+	log.Printf("BitPic (%s): %s -> %s @ block %d", status, data.Paymail, tx.Id, tx.BlockHeight)
 }
