@@ -29,7 +29,8 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   const [handleError, setHandleError] = useState("");
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
-  const { isConnected, connect, address, pubKey, ordAddress } = useWallet();
+  const { isConnected, connect, address, pubKey, ordAddress, identityAddress } =
+    useWallet();
 
   const resetState = () => {
     setStep("handle");
@@ -81,12 +82,13 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
     if (!isConnected) {
       try {
         await connect();
+        // After connecting, stay on wallet step to show addresses
       } catch (error) {
         console.error("Failed to connect wallet:", error);
-        return;
       }
+      return;
     }
-    // Proceed to register after wallet is connected
+    // Already connected - proceed to register
     await registerPaymail();
   };
 
@@ -188,23 +190,51 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
         return (
           <>
             <DialogHeader>
-              <DialogTitle>Connect Your Wallet</DialogTitle>
+              <DialogTitle>
+                {isConnected ? "Confirm Registration" : "Connect Your Wallet"}
+              </DialogTitle>
               <DialogDescription>
-                Connect your Yours Wallet to register your paymail
+                {isConnected
+                  ? "Review your addresses before registering"
+                  : "Connect your Yours Wallet to register your paymail"}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="rounded-sm border border-border/40 bg-muted/50 p-4 space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Your paymail:{" "}
-                  <span className="font-mono text-foreground">
+              <div className="rounded-sm border border-border/40 bg-muted/50 p-4 space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Your paymail</p>
+                  <p className="font-mono text-sm text-foreground">
                     {handle.toLowerCase()}@bitpic.net
-                  </span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Your wallet addresses will be linked to this paymail for
-                  receiving payments and ordinals.
-                </p>
+                  </p>
+                </div>
+                {isConnected && (
+                  <>
+                    <div className="border-t border-border/40 pt-3">
+                      <p className="text-xs text-muted-foreground">
+                        Identity address (for signing)
+                      </p>
+                      <p className="font-mono text-xs text-foreground break-all">
+                        {identityAddress}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        BSV payment address
+                      </p>
+                      <p className="font-mono text-xs text-foreground break-all">
+                        {address}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Ordinals receive address
+                      </p>
+                      <p className="font-mono text-xs text-foreground break-all">
+                        {ordAddress}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
               {handleError && (
                 <p className="text-sm text-destructive">{handleError}</p>
@@ -223,7 +253,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                 disabled={isRegistering}
                 className="w-full"
               >
-                {isConnected ? "Register Paymail" : "Connect & Register"}
+                {isConnected ? "Register Paymail" : "Connect Wallet"}
               </Button>
             </DialogFooter>
           </>
