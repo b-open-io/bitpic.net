@@ -27,17 +27,16 @@ export async function GET(
 
     const data = await response.json();
 
-    if (!data.pubkey) {
+    if (!data.identityPubkey) {
       return NextResponse.json(
         { error: "Public key not configured" },
         { status: 400 },
       );
     }
 
-    // Compare the provided pubkey with the registered pubkey
+    // Compare the provided pubkey with the registered identity pubkey
     const match =
-      data.pubkey.toLowerCase() === pubkey.toLowerCase() ||
-      data.paymentPubkey?.toLowerCase() === pubkey.toLowerCase();
+      data.identityPubkey.toLowerCase() === pubkey.toLowerCase();
 
     return NextResponse.json({
       match,

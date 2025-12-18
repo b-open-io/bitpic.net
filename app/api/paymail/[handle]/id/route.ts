@@ -30,7 +30,7 @@ export async function GET(
     return NextResponse.json({
       bsvalias: "1.0",
       handle: data.handle || handle,
-      pubkey: data.pubkey,
+      pubkey: data.identityPubkey,
     });
   } catch (error) {
     console.error("PKI endpoint error:", error);
