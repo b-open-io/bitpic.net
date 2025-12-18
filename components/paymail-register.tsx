@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import type { RegisterPaymailRequest } from "@/lib/api";
 import { api } from "@/lib/api";
 import {
+  PAYMAIL_FEE_ADDRESS,
   PAYMAIL_FEE_USD,
   estimateFeeSatoshis,
   formatFeeUSD,
@@ -34,8 +35,9 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   const [handleError, setHandleError] = useState("");
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [txid, setTxid] = useState("");
-  const { isConnected, connect, pubKey, wallet } = useWallet();
+  const [paymentTxid, setPaymentTxid] = useState("");
+  const { isConnected, connect, address, pubKey, ordAddress, wallet } =
+    useWallet();
 
   const resetState = () => {
     setStep("handle");
@@ -43,7 +45,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
     setHandleError("");
     setIsCheckingAvailability(false);
     setIsProcessing(false);
-    setTxid("");
+    setPaymentTxid("");
   };
 
   const handleClose = (open: boolean) => {
@@ -98,8 +100,19 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   };
 
   const handlePayment = async () => {
-    if (!wallet || !pubKey) {
-      console.error("Wallet not connected");
+    if (!wallet || !address || !pubKey || !ordAddress) {
+      setHandleError("Wallet not properly connected. Please reconnect.");
+      return;
+    }
+
+    if (!PAYMAIL_FEE_ADDRESS) {
+      setHandleError("Payment address not configured. Please try again later.");
+      return;
+    }
+
+    // Skip payment if fee is 0
+    if (PAYMAIL_FEE_USD === 0) {
+      await registerPaymail("");
       return;
     }
 
@@ -107,29 +120,61 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
     setStep("processing");
 
     try {
-      // TODO: Build actual payment transaction using transaction-builder.ts
-      // For now, this is a placeholder structure
-      const mockRawtx = "0100000001..."; // This should be built properly
-      const mockSignature = "signature"; // This should be a proper signature
+      // Send payment to fee address
+      const satoshis = estimateFeeSatoshis();
+      const result = await wallet.sendBsv([
+        {
+          satoshis,
+          address: PAYMAIL_FEE_ADDRESS,
+        },
+      ]);
 
+      if (!result?.txid) {
+        throw new Error("Payment failed - no transaction ID returned");
+      }
+
+      setPaymentTxid(result.txid);
+      await registerPaymail(result.txid);
+    } catch (error) {
+      console.error("Payment failed:", error);
+      setHandleError(
+        error instanceof Error ? error.message : "Payment failed",
+      );
+      setStep("payment");
+      setIsProcessing(false);
+    }
+  };
+
+  const registerPaymail = async (txid: string) => {
+    if (!address || !pubKey || !ordAddress) {
+      setHandleError("Wallet addresses not available");
+      setStep("payment");
+      setIsProcessing(false);
+      return;
+    }
+
+    try {
       const request: RegisterPaymailRequest = {
         handle: handle.toLowerCase(),
-        pubKey,
-        signature: mockSignature,
-        rawtx: mockRawtx,
+        paymentTxid: txid,
+        paymentAddress: address,
+        paymentPubkey: pubKey,
+        ordAddress: ordAddress,
       };
 
       const result = await api.registerPaymail(request);
 
-      if (result.success && result.txid) {
-        setTxid(result.txid);
+      if (result.success) {
+        setPaymentTxid(txid);
         setStep("success");
       } else {
         throw new Error(result.error || "Failed to register paymail");
       }
     } catch (error) {
-      console.error("Payment failed:", error);
-      setHandleError(error instanceof Error ? error.message : "Payment failed");
+      console.error("Registration failed:", error);
+      setHandleError(
+        error instanceof Error ? error.message : "Registration failed",
+      );
       setStep("payment");
     } finally {
       setIsProcessing(false);
@@ -235,7 +280,9 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
             <DialogHeader>
               <DialogTitle>Complete Payment</DialogTitle>
               <DialogDescription>
-                Pay {formatFeeUSD()} to register your paymail address
+                {PAYMAIL_FEE_USD > 0
+                  ? `Pay ${formatFeeUSD()} to register your paymail address`
+                  : "Confirm registration of your paymail address"}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -246,16 +293,19 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                     {handle.toLowerCase()}@bitpic.net
                   </span>
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  Cost:{" "}
-                  <span className="font-mono text-foreground">
-                    {formatFeeUSD()}
-                  </span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  (~{estimateFeeSatoshis().toLocaleString()} satoshis based on
-                  current rate)
-                </p>
+                {PAYMAIL_FEE_USD > 0 && (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Cost:{" "}
+                      <span className="font-mono text-foreground">
+                        {formatFeeUSD()}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      (~{estimateFeeSatoshis().toLocaleString()} satoshis)
+                    </p>
+                  </>
+                )}
               </div>
               {handleError && (
                 <p className="text-sm text-destructive">{handleError}</p>
@@ -274,7 +324,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                 disabled={isProcessing}
                 className="w-full"
               >
-                Pay & Register
+                {PAYMAIL_FEE_USD > 0 ? "Pay & Register" : "Register"}
               </Button>
             </DialogFooter>
           </>
@@ -292,7 +342,9 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
-                Broadcasting transaction...
+                {PAYMAIL_FEE_USD > 0
+                  ? "Broadcasting payment..."
+                  : "Registering paymail..."}
               </p>
             </div>
           </>
@@ -316,9 +368,11 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                     {handle.toLowerCase()}@bitpic.net
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground font-mono break-all">
-                  Transaction: {txid}
-                </p>
+                {paymentTxid && (
+                  <p className="text-xs text-muted-foreground font-mono break-all">
+                    Transaction: {paymentTxid}
+                  </p>
+                )}
               </div>
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">

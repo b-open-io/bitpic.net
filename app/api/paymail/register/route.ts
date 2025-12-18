@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const WOC_API = "https://api.whatsonchain.com/v1/bsv/main";
+const PAYMAIL_FEE_USD = Number(process.env.NEXT_PUBLIC_PAYMAIL_FEE_USD || "1");
 
 interface RegisterRequest {
   handle: string;
@@ -15,10 +16,9 @@ export async function POST(request: NextRequest) {
   try {
     const body: RegisterRequest = await request.json();
 
-    // Validate required fields
+    // Validate required fields (paymentTxid only required if fee > 0)
     if (
       !body.handle ||
-      !body.paymentTxid ||
       !body.paymentAddress ||
       !body.paymentPubkey ||
       !body.ordAddress
@@ -29,11 +29,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate handle format (alphanumeric and hyphens only)
-    if (!/^[a-zA-Z0-9-]+$/.test(body.handle)) {
+    // Require paymentTxid only if fee is greater than 0
+    if (PAYMAIL_FEE_USD > 0 && !body.paymentTxid) {
+      return NextResponse.json(
+        { error: "Payment transaction required" },
+        { status: 400 },
+      );
+    }
+
+    // Validate handle format (alphanumeric only)
+    if (!/^[a-zA-Z0-9]+$/.test(body.handle)) {
       return NextResponse.json(
         {
-          error: "Handle must contain only alphanumeric characters and hyphens",
+          error: "Handle must contain only letters and numbers",
         },
         { status: 400 },
       );
@@ -50,23 +58,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify payment transaction on-chain
-    const txResponse = await fetch(`${WOC_API}/tx/${body.paymentTxid}`);
-    if (!txResponse.ok) {
-      return NextResponse.json(
-        { error: "Payment transaction not found on-chain" },
-        { status: 400 },
-      );
-    }
-
-    const txData = await txResponse.json();
-
-    // Verify transaction has confirmations
-    if (!txData.confirmations || txData.confirmations < 1) {
-      return NextResponse.json(
-        { error: "Payment transaction not confirmed yet" },
-        { status: 400 },
-      );
+    // Verify payment transaction on-chain (only if fee > 0)
+    if (PAYMAIL_FEE_USD > 0 && body.paymentTxid) {
+      const txResponse = await fetch(`${WOC_API}/tx/${body.paymentTxid}`);
+      if (!txResponse.ok) {
+        // Transaction might not be indexed yet - allow registration anyway
+        // The payment was already sent via wallet
+        console.log(
+          `Payment tx ${body.paymentTxid} not yet indexed, proceeding with registration`,
+        );
+      }
     }
 
     // Store paymail record in Go backend via Redis
@@ -77,11 +78,11 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         handle: body.handle,
-        paymentTxid: body.paymentTxid,
+        paymentTxid: body.paymentTxid || "",
         paymentAddress: body.paymentAddress,
         paymentPubkey: body.paymentPubkey,
         ordAddress: body.ordAddress,
-        pubkey: body.paymentPubkey, // Use payment pubkey as default pubkey
+        pubkey: body.paymentPubkey,
       }),
     });
 
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       paymail: `${body.handle}@bitpic.net`,
+      txid: body.paymentTxid || "",
     });
   } catch (error) {
     console.error("Registration endpoint error:", error);

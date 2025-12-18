@@ -51,9 +51,10 @@ export interface PaymailAvailableResponse {
 
 export interface RegisterPaymailRequest {
   handle: string;
-  pubKey: string;
-  signature: string;
-  rawtx: string;
+  paymentTxid: string;
+  paymentAddress: string;
+  paymentPubkey: string;
+  ordAddress: string;
 }
 
 export class BitPicAPI {
