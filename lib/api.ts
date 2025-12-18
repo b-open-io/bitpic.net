@@ -51,10 +51,15 @@ export interface PaymailAvailableResponse {
 
 export interface RegisterPaymailRequest {
   handle: string;
-  paymentTxid: string;
+  identityPubkey: string;
   paymentAddress: string;
-  paymentPubkey: string;
   ordAddress: string;
+}
+
+export interface RegisterPaymailResponse {
+  success: boolean;
+  paymail?: string;
+  error?: string;
 }
 
 export class BitPicAPI {
@@ -174,7 +179,7 @@ export class BitPicAPI {
 
   async registerPaymail(
     data: RegisterPaymailRequest,
-  ): Promise<BroadcastResponse> {
+  ): Promise<RegisterPaymailResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/api/paymail/register`, {
         method: "POST",
@@ -197,7 +202,6 @@ export class BitPicAPI {
     } catch (error) {
       console.error("Error registering paymail:", error);
       return {
-        txid: "",
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
       };

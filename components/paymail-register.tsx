@@ -14,12 +14,6 @@ import {
 import { Input } from "@/components/ui/input";
 import type { RegisterPaymailRequest } from "@/lib/api";
 import { api } from "@/lib/api";
-import {
-  PAYMAIL_FEE_ADDRESS,
-  PAYMAIL_FEE_USD,
-  estimateFeeSatoshis,
-  formatFeeUSD,
-} from "@/lib/config";
 import { useWallet } from "@/lib/use-wallet";
 
 interface PaymailRegisterProps {
@@ -27,25 +21,22 @@ interface PaymailRegisterProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type Step = "handle" | "wallet" | "payment" | "processing" | "success";
+type Step = "handle" | "wallet" | "registering" | "success";
 
 export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   const [step, setStep] = useState<Step>("handle");
   const [handle, setHandle] = useState("");
   const [handleError, setHandleError] = useState("");
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentTxid, setPaymentTxid] = useState("");
-  const { isConnected, connect, address, pubKey, ordAddress, wallet } =
-    useWallet();
+  const [isRegistering, setIsRegistering] = useState(false);
+  const { isConnected, connect, address, pubKey, ordAddress } = useWallet();
 
   const resetState = () => {
     setStep("handle");
     setHandle("");
     setHandleError("");
     setIsCheckingAvailability(false);
-    setIsProcessing(false);
-    setPaymentTxid("");
+    setIsRegistering(false);
   };
 
   const handleClose = (open: boolean) => {
@@ -90,82 +81,35 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
     if (!isConnected) {
       try {
         await connect();
-        setStep("payment");
       } catch (error) {
         console.error("Failed to connect wallet:", error);
+        return;
       }
-    } else {
-      setStep("payment");
     }
+    // Proceed to register after wallet is connected
+    await registerPaymail();
   };
 
-  const handlePayment = async () => {
-    if (!wallet || !address || !pubKey || !ordAddress) {
+  const registerPaymail = async () => {
+    if (!address || !pubKey || !ordAddress) {
       setHandleError("Wallet not properly connected. Please reconnect.");
       return;
     }
 
-    if (!PAYMAIL_FEE_ADDRESS) {
-      setHandleError("Payment address not configured. Please try again later.");
-      return;
-    }
-
-    // Skip payment if fee is 0
-    if (PAYMAIL_FEE_USD === 0) {
-      await registerPaymail("");
-      return;
-    }
-
-    setIsProcessing(true);
-    setStep("processing");
-
-    try {
-      // Send payment to fee address
-      const satoshis = estimateFeeSatoshis();
-      const result = await wallet.sendBsv([
-        {
-          satoshis,
-          address: PAYMAIL_FEE_ADDRESS,
-        },
-      ]);
-
-      if (!result?.txid) {
-        throw new Error("Payment failed - no transaction ID returned");
-      }
-
-      setPaymentTxid(result.txid);
-      await registerPaymail(result.txid);
-    } catch (error) {
-      console.error("Payment failed:", error);
-      setHandleError(
-        error instanceof Error ? error.message : "Payment failed",
-      );
-      setStep("payment");
-      setIsProcessing(false);
-    }
-  };
-
-  const registerPaymail = async (txid: string) => {
-    if (!address || !pubKey || !ordAddress) {
-      setHandleError("Wallet addresses not available");
-      setStep("payment");
-      setIsProcessing(false);
-      return;
-    }
+    setIsRegistering(true);
+    setStep("registering");
 
     try {
       const request: RegisterPaymailRequest = {
         handle: handle.toLowerCase(),
-        paymentTxid: txid,
+        identityPubkey: pubKey,
         paymentAddress: address,
-        paymentPubkey: pubKey,
         ordAddress: ordAddress,
       };
 
       const result = await api.registerPaymail(request);
 
       if (result.success) {
-        setPaymentTxid(txid);
         setStep("success");
       } else {
         throw new Error(result.error || "Failed to register paymail");
@@ -175,9 +119,9 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
       setHandleError(
         error instanceof Error ? error.message : "Registration failed",
       );
-      setStep("payment");
+      setStep("wallet");
     } finally {
-      setIsProcessing(false);
+      setIsRegistering(false);
     }
   };
 
@@ -246,43 +190,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
             <DialogHeader>
               <DialogTitle>Connect Your Wallet</DialogTitle>
               <DialogDescription>
-                Connect your Yours Wallet to complete the registration
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="rounded-sm border border-border/40 bg-muted/50 p-4">
-                <p className="text-sm text-muted-foreground">
-                  Your paymail:{" "}
-                  <span className="font-mono text-foreground">
-                    {handle.toLowerCase()}@bitpic.net
-                  </span>
-                </p>
-              </div>
-            </div>
-            <DialogFooter className="flex-col gap-2 sm:flex-row">
-              <Button
-                variant="outline"
-                onClick={() => setStep("handle")}
-                className="w-full"
-              >
-                Back
-              </Button>
-              <Button onClick={handleWalletConnect} className="w-full">
-                {isConnected ? "Continue" : "Connect Wallet"}
-              </Button>
-            </DialogFooter>
-          </>
-        );
-
-      case "payment":
-        return (
-          <>
-            <DialogHeader>
-              <DialogTitle>Complete Payment</DialogTitle>
-              <DialogDescription>
-                {PAYMAIL_FEE_USD > 0
-                  ? `Pay ${formatFeeUSD()} to register your paymail address`
-                  : "Confirm registration of your paymail address"}
+                Connect your Yours Wallet to register your paymail
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -293,19 +201,10 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                     {handle.toLowerCase()}@bitpic.net
                   </span>
                 </p>
-                {PAYMAIL_FEE_USD > 0 && (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      Cost:{" "}
-                      <span className="font-mono text-foreground">
-                        {formatFeeUSD()}
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      (~{estimateFeeSatoshis().toLocaleString()} satoshis)
-                    </p>
-                  </>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  Your wallet addresses will be linked to this paymail for
+                  receiving payments and ordinals.
+                </p>
               </div>
               {handleError && (
                 <p className="text-sm text-destructive">{handleError}</p>
@@ -314,37 +213,35 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
             <DialogFooter className="flex-col gap-2 sm:flex-row">
               <Button
                 variant="outline"
-                onClick={() => setStep("wallet")}
+                onClick={() => setStep("handle")}
                 className="w-full"
               >
                 Back
               </Button>
               <Button
-                onClick={handlePayment}
-                disabled={isProcessing}
+                onClick={handleWalletConnect}
+                disabled={isRegistering}
                 className="w-full"
               >
-                {PAYMAIL_FEE_USD > 0 ? "Pay & Register" : "Register"}
+                {isConnected ? "Register Paymail" : "Connect & Register"}
               </Button>
             </DialogFooter>
           </>
         );
 
-      case "processing":
+      case "registering":
         return (
           <>
             <DialogHeader>
-              <DialogTitle>Processing Registration</DialogTitle>
+              <DialogTitle>Registering Paymail</DialogTitle>
               <DialogDescription>
-                Please wait while we register your paymail
+                Setting up your @bitpic.net address
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
-                {PAYMAIL_FEE_USD > 0
-                  ? "Broadcasting payment..."
-                  : "Registering paymail..."}
+                Linking your wallet addresses...
               </p>
             </div>
           </>
@@ -356,7 +253,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Check className="h-5 w-5 text-green-500" />
-                Registration Successful!
+                Registration Complete
               </DialogTitle>
               <DialogDescription>Your paymail is now active</DialogDescription>
             </DialogHeader>
@@ -368,19 +265,14 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                     {handle.toLowerCase()}@bitpic.net
                   </p>
                 </div>
-                {paymentTxid && (
-                  <p className="text-xs text-muted-foreground font-mono break-all">
-                    Transaction: {paymentTxid}
-                  </p>
-                )}
               </div>
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">
                   Your paymail includes:
                 </p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li>Avatar hosting</li>
-                  <li>Payment address</li>
+                  <li>Avatar hosting via BitPic</li>
+                  <li>BSV payment address resolution</li>
                   <li>Ordinals receive address</li>
                 </ul>
               </div>

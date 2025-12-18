@@ -237,12 +237,10 @@ func (r *RedisClient) GetTotalAvatars() (int64, error) {
 // PaymailData represents a registered paymail
 type PaymailData struct {
 	Handle         string `json:"handle"`
+	IdentityPubkey string `json:"identityPubkey"`
 	PaymentAddress string `json:"paymentAddress"`
-	PaymentPubkey  string `json:"paymentPubkey"`
 	OrdAddress     string `json:"ordAddress"`
-	IdentityPubkey string `json:"identityPubkey,omitempty"`
 	CreatedAt      int64  `json:"createdAt"`
-	PaymentTxid    string `json:"paymentTxid,omitempty"`
 }
 
 // SetPaymail stores a paymail record

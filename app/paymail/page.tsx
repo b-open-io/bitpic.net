@@ -11,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatFeeUSD } from "@/lib/config";
 
 export default function PaymailPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -25,8 +24,8 @@ export default function PaymailPage() {
             Get Your @bitpic.net Paymail
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            The universal avatar standard for Bitcoin. Like Gravatar, but
-            on-chain.
+            Free paymail address that forwards to your Yours Wallet. Receive BSV
+            and ordinals with a memorable address.
           </p>
           <div className="pt-4">
             <Button
@@ -34,7 +33,7 @@ export default function PaymailPage() {
               onClick={() => setRegisterOpen(true)}
               className="font-semibold"
             >
-              Register Now - {formatFeeUSD()}
+              Register Free
             </Button>
           </div>
         </div>
@@ -70,7 +69,7 @@ export default function PaymailPage() {
             <CardContent>
               <CardDescription>
                 Receive BSV payments using your easy-to-remember paymail instead
-                of long wallet addresses.
+                of long wallet addresses. Forwards to your Yours Wallet.
               </CardDescription>
             </CardContent>
           </Card>
@@ -87,7 +86,7 @@ export default function PaymailPage() {
             <CardContent>
               <CardDescription>
                 Receive 1Sat Ordinals NFTs directly to your paymail. Your
-                address handles both regular payments and inscriptions.
+                ordinals address is linked for easy receiving.
               </CardDescription>
             </CardContent>
           </Card>
@@ -98,13 +97,13 @@ export default function PaymailPage() {
                 <div className="p-2 rounded-sm bg-primary/10">
                   <Shield className="h-5 w-5 text-primary" />
                 </div>
-                <CardTitle className="text-base">Universal Avatar</CardTitle>
+                <CardTitle className="text-base">Identity Ownership</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Works like Gravatar. Your BitPic avatar automatically appears in
-                any wallet, app, or service that resolves paymails.
+                Your paymail is linked to your Yours Wallet identity key. Only
+                you can update your avatar using your registered paymail.
               </CardDescription>
             </CardContent>
           </Card>
@@ -113,7 +112,7 @@ export default function PaymailPage() {
         {/* How It Works */}
         <div className="pt-8 space-y-6">
           <h2 className="text-xl font-bold text-center">How It Works</h2>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             {[
               {
                 step: 1,
@@ -127,11 +126,6 @@ export default function PaymailPage() {
               },
               {
                 step: 3,
-                title: `Pay ${formatFeeUSD()}`,
-                desc: "One-time registration fee",
-              },
-              {
-                step: 4,
                 title: "You're Live",
                 desc: "Start using your paymail",
               },

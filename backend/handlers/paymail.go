@@ -57,9 +57,19 @@ func (h *PaymailHandler) Register(c *fiber.Ctx) error {
 			"error": "Handle is required",
 		})
 	}
-	if req.PaymentAddress == "" || req.PaymentPubkey == "" {
+	if req.IdentityPubkey == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Payment address and pubkey are required",
+			"error": "Identity pubkey is required",
+		})
+	}
+	if req.PaymentAddress == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Payment address is required",
+		})
+	}
+	if req.OrdAddress == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Ordinals address is required",
 		})
 	}
 
