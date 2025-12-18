@@ -5,8 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { ThemePicker } from "@/components/theme-picker";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/lib/use-wallet";
 import { cn } from "@/lib/utils";
@@ -66,8 +65,7 @@ export function Header() {
           >
             <Github className="h-4 w-4" />
           </Link>
-          <ThemePicker />
-          <ThemeToggle />
+          <ThemeSelector />
         </nav>
 
         {/* Actions */}
@@ -137,6 +135,10 @@ export function Header() {
               GitHub
             </Link>
           </nav>
+          <div className="pt-3 border-t border-border flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Theme</span>
+            <ThemeSelector />
+          </div>
           <div className="pt-3 border-t border-border">
             {isConnected ? (
               <div className="font-mono text-xs text-muted-foreground">
