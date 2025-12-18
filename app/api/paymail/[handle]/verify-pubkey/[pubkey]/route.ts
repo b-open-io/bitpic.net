@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { extractHandle } from "@/lib/paymail";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -7,7 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ handle: string; pubkey: string }> },
 ) {
   try {
-    const { handle, pubkey } = await params;
+    const { handle: rawHandle, pubkey } = await params;
+    const handle = extractHandle(rawHandle);
 
     // Fetch paymail data from Go backend
     const response = await fetch(`${API_URL}/api/paymail/${handle}`);
