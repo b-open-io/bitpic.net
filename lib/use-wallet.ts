@@ -8,6 +8,29 @@ export interface SocialProfile {
   avatar?: string;
 }
 
+// Raw ordinal structure from Yours Wallet
+interface RawOrdinal {
+  outpoint: string;
+  satoshis: number;
+  script: string;
+  spend: string;
+  height: number;
+  idx: number;
+  origin?: {
+    outpoint?: string;
+    data?: {
+      map?: Record<string, string>;
+      insc?: {
+        file?: {
+          type?: string;
+          size?: number;
+        };
+      };
+    };
+  };
+}
+
+// Normalized ordinal structure for our app and SDK compatibility
 export interface Ordinal {
   origin: string;
   outpoint: string;
@@ -25,6 +48,21 @@ export interface Ordinal {
       };
     };
   };
+}
+
+// Transform raw wallet ordinals to normalized format
+function normalizeOrdinals(rawOrdinals: RawOrdinal[]): Ordinal[] {
+  return rawOrdinals.map((raw) => ({
+    origin: raw.origin?.outpoint || raw.outpoint,
+    outpoint: raw.outpoint,
+    satoshis: raw.satoshis,
+    script: raw.script,
+    spend: raw.spend,
+    height: raw.height,
+    idx: raw.idx,
+    map: raw.origin?.data?.map,
+    data: raw.origin?.data ? { insc: raw.origin.data.insc } : undefined,
+  }));
 }
 
 export interface WalletState {
@@ -67,11 +105,13 @@ export function useWallet(): WalletState {
     if (!wallet) return;
     try {
       const result = await wallet.getOrdinals();
+      let rawOrdinals: RawOrdinal[] = [];
       if (Array.isArray(result)) {
-        setOrdinals(result as unknown as Ordinal[]);
+        rawOrdinals = result as RawOrdinal[];
       } else if (result && "data" in result) {
-        setOrdinals((result.data || []) as unknown as Ordinal[]);
+        rawOrdinals = (result.data || []) as RawOrdinal[];
       }
+      setOrdinals(normalizeOrdinals(rawOrdinals));
     } catch (err) {
       console.error("Failed to fetch ordinals:", err);
     }
@@ -149,11 +189,13 @@ export function useWallet(): WalletState {
       // Fetch ordinals for theme tokens
       try {
         const result = await wallet.getOrdinals();
+        let rawOrdinals: RawOrdinal[] = [];
         if (Array.isArray(result)) {
-          setOrdinals(result as unknown as Ordinal[]);
+          rawOrdinals = result as RawOrdinal[];
         } else if (result && "data" in result) {
-          setOrdinals((result.data || []) as unknown as Ordinal[]);
+          rawOrdinals = (result.data || []) as RawOrdinal[];
         }
+        setOrdinals(normalizeOrdinals(rawOrdinals));
       } catch {
         // Ordinals may not be available
       }
