@@ -1,5 +1,6 @@
-# Binaries (not the bitpic/ package directory)
-/bitpic
+# Binaries (the compiled binary, not the bitpic/ package directory)
+# Note: /bitpic would ignore the directory, so we use a specific pattern
+bitpic/bitpic
 *.exe
 *.exe~
 *.dll
