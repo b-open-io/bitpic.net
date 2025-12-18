@@ -31,13 +31,7 @@ export interface BitPicTransactionData {
  * Returns array of strings/buffers for Yours Wallet's sendBsv data field
  */
 export function buildBitPicOpReturn(data: BitPicTransactionData): string[] {
-  const {
-    paymail,
-    publicKey,
-    signature,
-    imageData,
-    mimeType,
-  } = data;
+  const { paymail, publicKey, signature, imageData, mimeType } = data;
 
   // Convert base64 image to buffer
   const imageBuffer = base64ToBuffer(imageData);
@@ -71,7 +65,7 @@ function base64ToBuffer(base64: string): string {
     }
     // Return as hex string for wallet
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, "0"))
+      .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
   }
 
@@ -94,7 +88,10 @@ export function estimateTransactionSize(imageDataBase64: string): number {
 /**
  * Calculate recommended fee in satoshis
  */
-export function calculateFee(imageSizeBytes: number, satoshisPerByte = 1): number {
+export function calculateFee(
+  imageSizeBytes: number,
+  satoshisPerByte = 1,
+): number {
   return estimateTransactionSize(imageSizeBytes.toString()) * satoshisPerByte;
 }
 
@@ -116,7 +113,10 @@ export interface ImageValidation {
   sizeBytes?: number;
 }
 
-export function validateImage(base64Data: string, maxSizeMB = 1): ImageValidation {
+export function validateImage(
+  base64Data: string,
+  maxSizeMB = 1,
+): ImageValidation {
   // Extract mime type from data URL
   const mimeMatch = base64Data.match(/^data:(image\/(?:png|jpeg));base64,/);
 

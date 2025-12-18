@@ -1,34 +1,34 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Image from "next/image"
-import { Copy, Check } from "lucide-react"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Check, Copy } from "lucide-react";
+import Image from "next/image";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 
 interface AvatarCardProps {
-  paymail: string
-  imageUrl: string
-  timestamp: string
+  paymail: string;
+  imageUrl: string;
+  timestamp: string;
 }
 
 export function AvatarCard({ paymail, imageUrl, timestamp }: AvatarCardProps) {
-  const [isHovered, setIsHovered] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [isHovered, setIsHovered] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(paymail)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    await navigator.clipboard.writeText(paymail);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const truncatePaymail = (email: string) => {
-    const [user, domain] = email.split("@")
+    const [user, domain] = email.split("@");
     if (user.length > 12) {
-      return `${user.slice(0, 6)}...${user.slice(-4)}@${domain}`
+      return `${user.slice(0, 6)}...${user.slice(-4)}@${domain}`;
     }
-    return email
-  }
+    return email;
+  };
 
   return (
     <Card
@@ -52,8 +52,8 @@ export function AvatarCard({ paymail, imageUrl, timestamp }: AvatarCardProps) {
                 size="icon"
                 variant="secondary"
                 onClick={(e) => {
-                  e.stopPropagation()
-                  handleCopy()
+                  e.stopPropagation();
+                  handleCopy();
                 }}
                 className="opacity-90 hover:opacity-100"
               >
@@ -74,5 +74,5 @@ export function AvatarCard({ paymail, imageUrl, timestamp }: AvatarCardProps) {
         <p className="text-xs text-muted-foreground">{timestamp}</p>
       </CardFooter>
     </Card>
-  )
+  );
 }

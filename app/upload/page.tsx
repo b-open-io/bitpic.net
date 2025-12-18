@@ -1,10 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { UploadDialog } from "@/components/upload-dialog";
 import { useWallet } from "@/lib/use-wallet";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -68,18 +74,20 @@ export default function UploadPage() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-gray-600">
               <p>
-                BitPic stores your avatar image directly on the Bitcoin blockchain,
-                making it permanent and immutable. Your avatar is associated with
-                your paymail address and authenticated using your Bitcoin wallet.
+                BitPic stores your avatar image directly on the Bitcoin
+                blockchain, making it permanent and immutable. Your avatar is
+                associated with your paymail address and authenticated using
+                your Bitcoin wallet.
               </p>
               <p>
-                The transaction includes your paymail, public key, and a cryptographic
-                signature proving you own the paymail, along with your avatar image
-                encoded using the B protocol.
+                The transaction includes your paymail, public key, and a
+                cryptographic signature proving you own the paymail, along with
+                your avatar image encoded using the B protocol.
               </p>
               <p className="text-xs text-gray-500 mt-4">
-                Transaction format: BitPic protocol (18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p) +
-                B protocol (19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut)
+                Transaction format: BitPic protocol
+                (18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p) + B protocol
+                (19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut)
               </p>
             </CardContent>
           </Card>

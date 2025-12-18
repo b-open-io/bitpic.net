@@ -15,7 +15,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "bitpic.net - Your avatar on bitcoin, forever",
-  description: "Store your avatar on the Bitcoin blockchain with bitpic. Immutable, permanent, and yours forever.",
+  description:
+    "Store your avatar on the Bitcoin blockchain with bitpic. Immutable, permanent, and yours forever.",
   keywords: ["bitcoin", "avatar", "blockchain", "paymail", "bsv"],
   authors: [{ name: "bitpic.net" }],
   openGraph: {

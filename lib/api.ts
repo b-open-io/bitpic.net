@@ -35,6 +35,26 @@ export interface BroadcastResponse {
   error?: string;
 }
 
+export interface StatusResponse {
+  connected: boolean;
+  syncing: boolean;
+  blockHeight: number;
+  blockHash: string;
+  timestamp: number;
+}
+
+export interface PaymailAvailableResponse {
+  available: boolean;
+  handle: string;
+}
+
+export interface RegisterPaymailRequest {
+  handle: string;
+  pubKey: string;
+  signature: string;
+  rawtx: string;
+}
+
 export class BitPicAPI {
   private baseUrl: string;
 
@@ -44,7 +64,9 @@ export class BitPicAPI {
 
   async getAvatar(paymail: string): Promise<AvatarResponse | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/avatar/${encodeURIComponent(paymail)}`);
+      const response = await fetch(
+        `${this.baseUrl}/api/avatar/${encodeURIComponent(paymail)}`,
+      );
       if (!response.ok) {
         if (response.status === 404) return null;
         throw new Error(`Failed to get avatar: ${response.statusText}`);
@@ -59,7 +81,7 @@ export class BitPicAPI {
   async getFeed(offset = 0, limit = 20): Promise<FeedResponse> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/api/feed?offset=${offset}&limit=${limit}`
+        `${this.baseUrl}/api/feed?offset=${offset}&limit=${limit}`,
       );
       if (!response.ok) {
         throw new Error(`Failed to get feed: ${response.statusText}`);
@@ -73,7 +95,9 @@ export class BitPicAPI {
 
   async exists(paymail: string): Promise<ExistsResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/exists/${encodeURIComponent(paymail)}`);
+      const response = await fetch(
+        `${this.baseUrl}/api/exists/${encodeURIComponent(paymail)}`,
+      );
       if (!response.ok) {
         throw new Error(`Failed to check existence: ${response.statusText}`);
       }
@@ -95,13 +119,81 @@ export class BitPicAPI {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(error.error || `Failed to broadcast: ${response.statusText}`);
+        const error = await response
+          .json()
+          .catch(() => ({ error: response.statusText }));
+        throw new Error(
+          error.error || `Failed to broadcast: ${response.statusText}`,
+        );
       }
 
       return await response.json();
     } catch (error) {
       console.error("Error broadcasting transaction:", error);
+      return {
+        txid: "",
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async getStatus(): Promise<StatusResponse | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/status`);
+      if (!response.ok) {
+        throw new Error(`Failed to get status: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching status:", error);
+      return null;
+    }
+  }
+
+  async checkPaymailAvailable(
+    handle: string,
+  ): Promise<PaymailAvailableResponse> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/api/paymail/available/${encodeURIComponent(handle)}`,
+      );
+      if (!response.ok) {
+        throw new Error(
+          `Failed to check paymail availability: ${response.statusText}`,
+        );
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error checking paymail availability:", error);
+      return { available: false, handle };
+    }
+  }
+
+  async registerPaymail(
+    data: RegisterPaymailRequest,
+  ): Promise<BroadcastResponse> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/paymail/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ error: response.statusText }));
+        throw new Error(
+          error.error || `Failed to register paymail: ${response.statusText}`,
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error registering paymail:", error);
       return {
         txid: "",
         success: false,

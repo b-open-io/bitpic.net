@@ -2,17 +2,23 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"time"
 
+	"github.com/b-open-io/bitpic/bitpic"
+	"github.com/b-open-io/bitpic/storage"
 	"github.com/gofiber/fiber/v2"
 )
 
 // BroadcastHandler handles the /api/broadcast endpoint
 type BroadcastHandler struct {
 	arcURL string
+	redis  *storage.RedisClient
 }
 
 // ARCResponse represents the response from ARC
@@ -39,9 +45,10 @@ type BroadcastResponse struct {
 }
 
 // NewBroadcastHandler creates a new broadcast handler
-func NewBroadcastHandler(arcURL string) *BroadcastHandler {
+func NewBroadcastHandler(arcURL string, redis *storage.RedisClient) *BroadcastHandler {
 	return &BroadcastHandler{
 		arcURL: arcURL,
+		redis:  redis,
 	}
 }
 
@@ -72,10 +79,43 @@ func (h *BroadcastHandler) Handle(c *fiber.Ctx) error {
 		})
 	}
 
+	// Immediately parse and store the transaction (don't wait for JungleBus)
+	go h.parseAndStore(req.RawTx, txid)
+
 	return c.JSON(BroadcastResponse{
 		Success: true,
 		TxID:    txid,
 	})
+}
+
+// parseAndStore parses and stores a BitPic transaction immediately after broadcast
+func (h *BroadcastHandler) parseAndStore(rawTxHex, txid string) {
+	// Decode hex transaction
+	txBytes, err := hex.DecodeString(rawTxHex)
+	if err != nil {
+		log.Printf("Failed to decode transaction %s: %v", txid, err)
+		return
+	}
+
+	// Parse BitPic data
+	data, err := bitpic.ParseTransaction(txBytes)
+	if err != nil {
+		// Not a BitPic transaction or parsing failed
+		log.Printf("Failed to parse BitPic transaction %s: %v", txid, err)
+		return
+	}
+
+	// Use current time for unconfirmed transaction
+	timestamp := time.Now().Unix()
+	data.Timestamp = timestamp
+
+	// Store in Redis as unconfirmed
+	if err := h.redis.SetAvatar(data.Paymail, data.Outpoint, txid, timestamp, false); err != nil {
+		log.Printf("Failed to store avatar for %s: %v", data.Paymail, err)
+		return
+	}
+
+	log.Printf("Immediately stored BitPic avatar (unconfirmed): %s -> %s", data.Paymail, data.Outpoint)
 }
 
 // broadcastToARC broadcasts a transaction to ARC

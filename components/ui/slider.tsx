@@ -1,22 +1,34 @@
-"use client"
+"use client";
 
-import { forwardRef } from "react"
-import { cn } from "@/lib/utils"
+import { forwardRef } from "react";
+import { cn } from "@/lib/utils";
 
 interface SliderProps {
-  className?: string
-  value?: number[]
-  onValueChange?: (value: number[]) => void
-  min?: number
-  max?: number
-  step?: number
-  disabled?: boolean
+  className?: string;
+  value?: number[];
+  onValueChange?: (value: number[]) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  disabled?: boolean;
 }
 
 const Slider = forwardRef<HTMLDivElement, SliderProps>(
-  ({ className, value, onValueChange, min = 0, max = 100, step = 1, disabled, ...props }, ref) => {
-    const currentValue = value?.[0] ?? 0
-    const percentage = ((currentValue - min) / (max - min)) * 100
+  (
+    {
+      className,
+      value,
+      onValueChange,
+      min = 0,
+      max = 100,
+      step = 1,
+      disabled,
+      ...props
+    },
+    ref,
+  ) => {
+    const currentValue = value?.[0] ?? 0;
+    const percentage = ((currentValue - min) / (max - min)) * 100;
 
     return (
       <div
@@ -24,7 +36,7 @@ const Slider = forwardRef<HTMLDivElement, SliderProps>(
         className={cn(
           "relative flex w-full touch-none select-none items-center",
           disabled && "opacity-50 pointer-events-none",
-          className
+          className,
         )}
         {...props}
       >
@@ -42,7 +54,7 @@ const Slider = forwardRef<HTMLDivElement, SliderProps>(
           value={currentValue}
           disabled={disabled}
           onChange={(e) => {
-            onValueChange?.([parseFloat(e.target.value)])
+            onValueChange?.([parseFloat(e.target.value)]);
           }}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         />
@@ -51,9 +63,9 @@ const Slider = forwardRef<HTMLDivElement, SliderProps>(
           style={{ left: `calc(${percentage}% - 0.5rem)` }}
         />
       </div>
-    )
-  }
-)
-Slider.displayName = "Slider"
+    );
+  },
+);
+Slider.displayName = "Slider";
 
-export { Slider }
+export { Slider };

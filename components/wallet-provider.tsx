@@ -1,7 +1,7 @@
 "use client";
 
-import { YoursProvider } from "yours-wallet-provider";
 import type { ReactNode } from "react";
+import { YoursProvider } from "yours-wallet-provider";
 
 interface WalletProviderProps {
   children: ReactNode;

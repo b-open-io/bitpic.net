@@ -10,6 +10,7 @@ import (
 	"github.com/b-open-io/bitpic/storage"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
@@ -28,12 +29,12 @@ func main() {
 	subscriptionID := getEnv("JUNGLEBUS_SUBSCRIPTION_ID", "d40d60de8e6fdaa627eefb14ea685052f5955e278d54f19e6564d6c5e5015eb3")
 	ordfsURL := getEnv("ORDFS_URL", "https://ordfs.network")
 	arcURL := getEnv("ARC_URL", "https://arc.taal.com")
-	cacheTTLStr := getEnv("IMAGE_CACHE_TTL", "3600")
+	cacheTTLStr := getEnv("IMAGE_CACHE_TTL", "2592000") // 30 days default
 
 	// Parse cache TTL
 	cacheTTL, err := time.ParseDuration(cacheTTLStr + "s")
 	if err != nil {
-		cacheTTL = 3600 * time.Second
+		cacheTTL = 2592000 * time.Second // 30 days
 	}
 
 	// Initialize Redis
@@ -71,12 +72,27 @@ func main() {
 		AllowHeaders: "Origin, Content-Type, Accept",
 	}))
 
+	// Rate limiting: 100 requests per minute per IP
+	app.Use(limiter.New(limiter.Config{
+		Max:        100,
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Rate limit exceeded",
+			})
+		},
+	}))
+
 	// Initialize handlers
 	avatarHandler := handlers.NewAvatarHandler(redis, ordfsURL, cacheTTL)
 	feedHandler := handlers.NewFeedHandler(redis)
 	apiHandler := handlers.NewAPIHandler(redis, ordfsURL)
 	existsHandler := handlers.NewExistsHandler(redis)
-	broadcastHandler := handlers.NewBroadcastHandler(arcURL)
+	broadcastHandler := handlers.NewBroadcastHandler(arcURL, redis)
+	statusHandler := handlers.NewStatusHandler(redis, subscriber)
 
 	// Routes
 	app.Get("/health", handlers.Health)
@@ -84,6 +100,7 @@ func main() {
 	app.Get("/api/feed", feedHandler.Handle)
 	app.Get("/api/avatar/:paymail", apiHandler.Handle)
 	app.Get("/api/exists/:paymail", existsHandler.Handle)
+	app.Get("/api/status", statusHandler.Handle)
 	app.Post("/api/broadcast", broadcastHandler.Handle)
 
 	// Start server

@@ -48,8 +48,15 @@ func (h *AvatarHandler) Handle(c *fiber.Ctx) error {
 	if err == nil && cached != nil {
 		// Detect content type from cached data
 		contentType := detectContentType(cached)
+		if contentType == "" || !isAllowedContentType(contentType) {
+			return c.Status(fiber.StatusUnsupportedMediaType).SendString("Unsupported image format")
+		}
+
+		// Set security headers
 		c.Set("Content-Type", contentType)
-		c.Set("Cache-Control", "public, max-age=3600")
+		c.Set("Content-Security-Policy", "default-src 'none'")
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("Cache-Control", "public, max-age=2592000") // 30 days
 		return c.Send(cached)
 	}
 
@@ -71,28 +78,36 @@ func (h *AvatarHandler) Handle(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString("Failed to read image data")
 	}
 
-	// Cache the image
-	if err := h.redis.CacheImage(outpoint, imageData, h.cacheTTL); err != nil {
-		// Log error but don't fail the request
-		fmt.Printf("Failed to cache image: %v\n", err)
-	}
-
 	// Get content type from response or detect it
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = detectContentType(imageData)
 	}
 
-	// Set headers and return image
+	// Validate content type
+	if contentType == "" || !isAllowedContentType(contentType) {
+		return c.Status(fiber.StatusUnsupportedMediaType).SendString("Unsupported image format")
+	}
+
+	// Cache the image
+	if err := h.redis.CacheImage(outpoint, imageData, h.cacheTTL); err != nil {
+		// Log error but don't fail the request
+		fmt.Printf("Failed to cache image: %v\n", err)
+	}
+
+	// Set security headers and return image
 	c.Set("Content-Type", contentType)
-	c.Set("Cache-Control", "public, max-age=3600")
+	c.Set("Content-Security-Policy", "default-src 'none'")
+	c.Set("X-Content-Type-Options", "nosniff")
+	c.Set("Cache-Control", "public, max-age=2592000") // 30 days
 	return c.Send(imageData)
 }
 
 // detectContentType detects the content type of image data
+// Only allows safe image formats (blocks SVG for XSS protection)
 func detectContentType(data []byte) string {
 	if len(data) < 12 {
-		return "application/octet-stream"
+		return ""
 	}
 
 	// Check for common image formats
@@ -106,10 +121,25 @@ func detectContentType(data []byte) string {
 	case len(data) >= 12 && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
 		data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50:
 		return "image/webp"
-	case len(data) >= 4 && (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01 && data[3] == 0x00 ||
-		data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x02 && data[3] == 0x00):
-		return "image/x-icon"
 	default:
-		return "application/octet-stream"
+		// Unsupported format (including SVG which is blocked for security)
+		return ""
 	}
+}
+
+// isAllowedContentType checks if the content type is allowed
+func isAllowedContentType(contentType string) bool {
+	allowed := []string{
+		"image/png",
+		"image/jpeg",
+		"image/gif",
+		"image/webp",
+	}
+
+	for _, t := range allowed {
+		if contentType == t {
+			return true
+		}
+	}
+	return false
 }

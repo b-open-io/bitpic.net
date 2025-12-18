@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import Cropper from "react-easy-crop";
+import { useCallback, useState } from "react";
 import type { Area, Point } from "react-easy-crop";
+import Cropper from "react-easy-crop";
 import { Slider } from "@/components/ui/slider";
 
 interface ImageCropperProps {
@@ -11,7 +11,11 @@ interface ImageCropperProps {
   onCancel?: () => void;
 }
 
-export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperProps) {
+export function ImageCropper({
+  image,
+  onCropComplete,
+  onCancel,
+}: ImageCropperProps) {
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
@@ -29,7 +33,7 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
     (_croppedArea: Area, croppedAreaPixels: Area) => {
       setCroppedAreaPixels(croppedAreaPixels);
     },
-    []
+    [],
   );
 
   const handleCropComplete = useCallback(async () => {
@@ -100,7 +104,10 @@ export function ImageCropper({ image, onCropComplete, onCancel }: ImageCropperPr
 /**
  * Crop image to specified area and return as base64
  */
-async function getCroppedImage(imageSrc: string, pixelCrop: Area): Promise<string> {
+async function getCroppedImage(
+  imageSrc: string,
+  pixelCrop: Area,
+): Promise<string> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -123,7 +130,7 @@ async function getCroppedImage(imageSrc: string, pixelCrop: Area): Promise<strin
     0,
     0,
     pixelCrop.width,
-    pixelCrop.height
+    pixelCrop.height,
   );
 
   // Convert to base64
@@ -142,7 +149,7 @@ async function getCroppedImage(imageSrc: string, pixelCrop: Area): Promise<strin
         reader.readAsDataURL(blob);
       },
       "image/png",
-      0.95
+      0.95,
     );
   });
 }

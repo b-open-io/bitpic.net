@@ -18,6 +18,10 @@ type Subscriber struct {
 	junglebusURL   string
 	redis          *storage.RedisClient
 	client         *http.Client
+	connected      bool
+	syncing        bool
+	lastBlock      uint64
+	lastBlockTime  time.Time
 }
 
 // JungleBusMessage represents a message from JungleBus
@@ -43,12 +47,29 @@ func NewSubscriber(junglebusURL, subscriptionID string, redis *storage.RedisClie
 
 // Start begins listening to JungleBus subscription
 func (s *Subscriber) Start() error {
-	url := fmt.Sprintf("%s/v1/subscribe/%s", s.junglebusURL, s.subscriptionID)
+	// Get last block from Redis
+	lastBlock, err := s.redis.GetLastBlock()
+	if err != nil {
+		log.Printf("Warning: failed to get last block from Redis: %v", err)
+		lastBlock = 0
+	}
+
+	// Build subscription URL with fromBlock parameter if we have a last block
+	var url string
+	if lastBlock > 0 {
+		url = fmt.Sprintf("%s/v1/subscribe/%s?fromBlock=%d", s.junglebusURL, s.subscriptionID, lastBlock)
+		log.Printf("Resuming from block %d", lastBlock)
+	} else {
+		url = fmt.Sprintf("%s/v1/subscribe/%s", s.junglebusURL, s.subscriptionID)
+		log.Printf("Starting from current tip")
+	}
 
 	log.Printf("Connecting to JungleBus subscription: %s", s.subscriptionID)
 
 	for {
+		s.syncing = true
 		err := s.connect(url)
+		s.connected = false
 		if err != nil {
 			log.Printf("JungleBus connection error: %v", err)
 			log.Println("Reconnecting in 5 seconds...")
@@ -56,6 +77,11 @@ func (s *Subscriber) Start() error {
 			continue
 		}
 	}
+}
+
+// GetStatus returns the current subscriber status
+func (s *Subscriber) GetStatus() (connected bool, syncing bool, lastBlock uint64, lastBlockTime time.Time) {
+	return s.connected, s.syncing, s.lastBlock, s.lastBlockTime
 }
 
 // connect establishes SSE connection to JungleBus
@@ -80,6 +106,7 @@ func (s *Subscriber) connect(url string) error {
 	}
 
 	log.Println("Connected to JungleBus, listening for transactions...")
+	s.connected = true
 
 	// Read SSE stream
 	buffer := make([]byte, 0, 8192)
@@ -144,6 +171,17 @@ func (s *Subscriber) readLine(r io.Reader, buffer *[]byte) ([]byte, error) {
 
 // processTransaction processes a transaction from JungleBus
 func (s *Subscriber) processTransaction(msg *JungleBusMessage) error {
+	// Update last block info if this is from a block
+	if msg.BlockHeight > 0 {
+		s.lastBlock = msg.BlockHeight
+		s.lastBlockTime = time.Unix(int64(msg.BlockTime), 0)
+
+		// Persist to Redis
+		if err := s.redis.SetLastBlock(msg.BlockHeight); err != nil {
+			log.Printf("Warning: failed to persist last block: %v", err)
+		}
+	}
+
 	// Decode hex transaction
 	txBytes, err := hexDecode(msg.Transaction)
 	if err != nil {

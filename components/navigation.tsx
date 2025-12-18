@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useWallet } from "@/lib/use-wallet";
 import { Button } from "@/components/ui/button";
+import { useWallet } from "@/lib/use-wallet";
 
 export function Navigation() {
   const { isConnected, address, connect, disconnect } = useWallet();

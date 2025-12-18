@@ -1,18 +1,18 @@
-"use client"
+"use client";
 
-import { AvatarCard } from "@/components/avatar-card"
-import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
+import { AvatarCard } from "@/components/avatar-card";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface AvatarData {
-  paymail: string
-  imageUrl: string
-  timestamp: string
+  paymail: string;
+  imageUrl: string;
+  timestamp: string;
 }
 
 interface FeedProps {
-  confirmed: AvatarData[]
-  unconfirmed?: AvatarData[]
+  confirmed: AvatarData[];
+  unconfirmed?: AvatarData[];
 }
 
 export function Feed({ confirmed, unconfirmed = [] }: FeedProps) {
@@ -44,7 +44,9 @@ export function Feed({ confirmed, unconfirmed = [] }: FeedProps) {
               Mempool
             </h2>
           </div>
-          <p className="text-sm text-muted-foreground italic">No pending uploads</p>
+          <p className="text-sm text-muted-foreground italic">
+            No pending uploads
+          </p>
         </div>
       )}
 
@@ -77,5 +79,5 @@ export function Feed({ confirmed, unconfirmed = [] }: FeedProps) {
         )}
       </div>
     </section>
-  )
+  );
 }

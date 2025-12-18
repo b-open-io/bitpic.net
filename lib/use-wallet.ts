@@ -1,7 +1,7 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { useYoursWallet } from "yours-wallet-provider";
-import { useEffect, useState, useCallback } from "react";
 
 export interface WalletState {
   wallet: ReturnType<typeof useYoursWallet> | null;
@@ -35,8 +35,14 @@ export function useWallet(): WalletState {
 
     // Set up event listeners using type assertion since the types may not include these
     try {
-      (wallet as { on?: (event: string, handler: () => void) => void }).on?.("switchAccount", resetState);
-      (wallet as { on?: (event: string, handler: () => void) => void }).on?.("signedOut", resetState);
+      (wallet as { on?: (event: string, handler: () => void) => void }).on?.(
+        "switchAccount",
+        resetState,
+      );
+      (wallet as { on?: (event: string, handler: () => void) => void }).on?.(
+        "signedOut",
+        resetState,
+      );
     } catch {
       // Events may not be supported
     }

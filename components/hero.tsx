@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { UploadCloud } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { UploadCloud } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 
 export function Hero() {
-  const [isDragging, setIsDragging] = useState(false)
-  const router = useRouter()
+  const [isDragging, setIsDragging] = useState(false);
+  const router = useRouter();
 
   return (
     <section className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 md:py-24">
@@ -34,25 +34,25 @@ export function Hero() {
               : "border-border hover:border-primary hover:bg-accent/50"
           }`}
           onDragEnter={(e) => {
-            e.preventDefault()
-            setIsDragging(true)
+            e.preventDefault();
+            setIsDragging(true);
           }}
           onDragLeave={(e) => {
-            e.preventDefault()
-            setIsDragging(false)
+            e.preventDefault();
+            setIsDragging(false);
           }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
-            e.preventDefault()
-            setIsDragging(false)
-            router.push("/upload")
+            e.preventDefault();
+            setIsDragging(false);
+            router.push("/upload");
           }}
           onClick={() => {
-            router.push("/upload")
+            router.push("/upload");
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
-              router.push("/upload")
+              router.push("/upload");
             }
           }}
           role="button"
@@ -60,9 +60,11 @@ export function Hero() {
           aria-label="Upload avatar image"
         >
           <div className="flex flex-col items-center gap-4">
-            <UploadCloud className={`h-12 w-12 transition-colors ${
-              isDragging ? "text-primary" : "text-muted-foreground"
-            }`} />
+            <UploadCloud
+              className={`h-12 w-12 transition-colors ${
+                isDragging ? "text-primary" : "text-muted-foreground"
+              }`}
+            />
             <div className="space-y-2">
               <p className="text-sm font-medium">
                 Drop your image here or click to upload
@@ -75,5 +77,5 @@ export function Hero() {
         </div>
       </div>
     </section>
-  )
+  );
 }

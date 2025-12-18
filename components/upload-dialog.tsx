@@ -1,17 +1,23 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useWallet } from "@/lib/use-wallet";
+import { useCallback, useState } from "react";
 import { ImageCropper } from "@/components/image-cropper";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import type { BitPicTransactionData } from "@/lib/transaction-builder";
 import {
   buildBitPicOpReturn,
   isValidPaymail,
   validateImage,
 } from "@/lib/transaction-builder";
-import type { BitPicTransactionData } from "@/lib/transaction-builder";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useWallet } from "@/lib/use-wallet";
 
 type Step = "upload" | "crop" | "details" | "sign" | "success";
 
@@ -30,36 +36,9 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [txid, setTxid] = useState<string | null>(null);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      const validation = validateImage(result);
-
-      if (!validation.valid) {
-        setError(validation.error || "Invalid image");
-        return;
-      }
-
-      setSelectedImage(result);
-      setError(null);
-      setStep("crop");
-    };
-    reader.readAsDataURL(file);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const file = e.dataTransfer.files?.[0];
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
       if (!file) return;
 
       if (!file.type.startsWith("image/")) {
@@ -83,8 +62,35 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
       };
       reader.readAsDataURL(file);
     },
-    []
+    [],
   );
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      const validation = validateImage(result);
+
+      if (!validation.valid) {
+        setError(validation.error || "Invalid image");
+        return;
+      }
+
+      setSelectedImage(result);
+      setError(null);
+      setStep("crop");
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -166,7 +172,9 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
       setStep("success");
       onSuccess?.(result.txid);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to sign and broadcast");
+      setError(
+        err instanceof Error ? err.message : "Failed to sign and broadcast",
+      );
       console.error("Error signing and broadcasting:", err);
       setStep("details");
     } finally {
@@ -233,8 +241,8 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                 <div className="text-gray-600">
                   <span className="font-medium text-blue-600 hover:text-blue-500">
                     Click to upload
-                  </span>
-                  {" "}or drag and drop
+                  </span>{" "}
+                  or drag and drop
                 </div>
                 <p className="text-xs text-gray-500">PNG or JPEG up to 1MB</p>
               </div>
@@ -270,14 +278,21 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                 <p className="text-sm text-gray-600">
                   Connect your Yours Wallet to continue
                 </p>
-                <Button onClick={handleConnect} disabled={isLoading} className="w-full">
+                <Button
+                  onClick={handleConnect}
+                  disabled={isLoading}
+                  className="w-full"
+                >
                   {isLoading ? "Connecting..." : "Connect Wallet"}
                 </Button>
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="paymail" className="block text-sm font-medium mb-2">
+                  <label
+                    htmlFor="paymail"
+                    className="block text-sm font-medium mb-2"
+                  >
                     Paymail
                   </label>
                   <Input
@@ -320,8 +335,12 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         {step === "sign" && (
           <div className="text-center py-8">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4" />
-            <p className="text-gray-600">Signing and broadcasting transaction...</p>
-            <p className="text-sm text-gray-500 mt-2">Please confirm in your wallet</p>
+            <p className="text-gray-600">
+              Signing and broadcasting transaction...
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Please confirm in your wallet
+            </p>
           </div>
         )}
 
@@ -337,7 +356,9 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
               </div>
             )}
             <div className="space-y-2">
-              <p className="text-green-600 font-medium">Avatar uploaded successfully!</p>
+              <p className="text-green-600 font-medium">
+                Avatar uploaded successfully!
+              </p>
               <p className="text-sm text-gray-600">Transaction ID:</p>
               <code className="block text-xs bg-gray-100 p-2 rounded break-all">
                 {txid}

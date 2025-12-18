@@ -188,6 +188,52 @@ func (r *RedisClient) GetCachedImage(outpoint string) ([]byte, error) {
 	return result, nil
 }
 
+// SetLastBlock stores the last processed block height
+func (r *RedisClient) SetLastBlock(height uint64) error {
+	key := "bitpic:sync:lastBlock"
+	if err := r.client.Set(r.ctx, key, height, 0).Err(); err != nil {
+		return fmt.Errorf("failed to set last block: %w", err)
+	}
+	return nil
+}
+
+// GetLastBlock retrieves the last processed block height
+func (r *RedisClient) GetLastBlock() (uint64, error) {
+	key := "bitpic:sync:lastBlock"
+	result, err := r.client.Get(r.ctx, key).Uint64()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last block: %w", err)
+	}
+	return result, nil
+}
+
+// GetTotalAvatars returns the total count of avatars
+func (r *RedisClient) GetTotalAvatars() (int64, error) {
+	pattern := "bitpic:current:*"
+	var cursor uint64
+	var count int64
+
+	for {
+		var keys []string
+		var err error
+		keys, cursor, err = r.client.Scan(r.ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return 0, fmt.Errorf("failed to scan keys: %w", err)
+		}
+
+		count += int64(len(keys))
+
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return count, nil
+}
+
 // Close closes the Redis connection
 func (r *RedisClient) Close() error {
 	return r.client.Close()

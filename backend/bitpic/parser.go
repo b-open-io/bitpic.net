@@ -94,6 +94,11 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 		return nil, errors.New("B protocol (image) data not found in transaction")
 	}
 
+	// Verify the signature
+	if err := VerifySignature(data.Paymail, data.PubKey, data.Signature); err != nil {
+		return nil, fmt.Errorf("signature verification failed: %w", err)
+	}
+
 	return data, nil
 }
 

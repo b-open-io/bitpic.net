@@ -1,22 +1,26 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Image from "next/image"
-import Link from "next/link"
-import { Search, Menu, X, Upload } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { useWallet } from "@/lib/use-wallet"
+import { Menu, Search, Upload, X } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useState } from "react";
+import { Status } from "@/components/status";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useWallet } from "@/lib/use-wallet";
 
 export function Header() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { isConnected, address, connect } = useWallet()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isConnected, address, connect } = useWallet();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 transition-opacity hover:opacity-80">
+        <Link
+          href="/"
+          className="flex items-center gap-3 transition-opacity hover:opacity-80"
+        >
           <Image
             src="/avatar.png"
             alt="bitpic"
@@ -24,7 +28,9 @@ export function Header() {
             height={32}
             className="rounded-sm"
           />
-          <span className="font-mono font-bold text-lg tracking-tight">bitpic</span>
+          <span className="font-mono font-bold text-lg tracking-tight">
+            bitpic
+          </span>
         </Link>
 
         {/* Desktop Nav */}
@@ -34,6 +40,12 @@ export function Header() {
             className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             Upload
+          </Link>
+          <Link
+            href="/paymail"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Get Paymail
           </Link>
           <Link
             href="/about"
@@ -71,6 +83,7 @@ export function Header() {
 
         {/* Wallet Connect & Actions */}
         <div className="hidden md:flex items-center gap-3">
+          <Status />
           <Link href="/upload">
             <Button variant="outline" size="sm" className="gap-2">
               <Upload className="h-4 w-4" />
@@ -123,6 +136,12 @@ export function Header() {
                 Upload
               </Link>
               <Link
+                href="/paymail"
+                className="px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-accent rounded-sm"
+              >
+                Get Paymail
+              </Link>
+              <Link
                 href="/about"
                 className="px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-accent rounded-sm"
               >
@@ -158,5 +177,5 @@ export function Header() {
         </div>
       )}
     </header>
-  )
+  );
 }
