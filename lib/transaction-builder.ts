@@ -29,6 +29,9 @@ export interface BitPicTransactionData {
 /**
  * Build BitPic transaction OP_RETURN data
  * Returns array of strings/buffers for Yours Wallet's sendBsv data field
+ *
+ * Format matches existing BitPic transactions:
+ * B protocol (image) | BitPic protocol (metadata)
  */
 export function buildBitPicOpReturn(data: BitPicTransactionData): string[] {
   const { paymail, publicKey, signature, imageData, mimeType } = data;
@@ -37,15 +40,17 @@ export function buildBitPicOpReturn(data: BitPicTransactionData): string[] {
   const imageBuffer = base64ToBuffer(imageData);
 
   return [
-    BITPIC_PREFIX,
-    paymail,
-    publicKey,
-    signature,
-    "|", // Separator
+    // B protocol tape (image data)
     B_PROTOCOL_PREFIX,
     imageBuffer,
     mimeType,
     "binary",
+    "|", // Pipe separator
+    // BitPic protocol tape (metadata)
+    BITPIC_PREFIX,
+    paymail,
+    publicKey,
+    signature,
   ];
 }
 

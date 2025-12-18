@@ -23,6 +23,7 @@ const (
 	OpPUSHDATA1 = 0x4c
 	OpPUSHDATA2 = 0x4d
 	OpPUSHDATA4 = 0x4e
+	OpPipe      = 0x7c // Pipe separator for multi-protocol OP_RETURN
 )
 
 // BitPicData represents parsed BitPic protocol data from a transaction
@@ -59,30 +60,33 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 			continue
 		}
 
-		// Parse the script chunks
-		parts, err := extractScriptParts(ls)
+		// Parse the script into tapes (segments separated by pipe |)
+		tapes, err := extractTapes(ls)
 		if err != nil {
 			continue
 		}
 
-		if len(parts) < 2 {
-			continue
-		}
-
-		// Check for BitPic prefix
-		if parts[0] == BitPicPrefix && !bitpicFound {
-			if len(parts) >= 4 {
-				data.Paymail = parts[1]
-				data.PubKey = parts[2]
-				data.Signature = parts[3]
-				bitpicFound = true
+		// Search each tape for protocol prefixes
+		for _, tape := range tapes {
+			if len(tape) < 1 {
+				continue
 			}
-		}
 
-		// Check for B protocol (image data)
-		if parts[0] == BProtocolPrefix && !bProtocolFound {
-			data.Outpoint = fmt.Sprintf("%s_%d", txid, i)
-			bProtocolFound = true
+			// Check for BitPic prefix
+			if tape[0] == BitPicPrefix && !bitpicFound {
+				if len(tape) >= 4 {
+					data.Paymail = tape[1]
+					data.PubKey = tape[2]
+					data.Signature = tape[3]
+					bitpicFound = true
+				}
+			}
+
+			// Check for B protocol (image data)
+			if tape[0] == BProtocolPrefix && !bProtocolFound {
+				data.Outpoint = fmt.Sprintf("%s_%d", txid, i)
+				bProtocolFound = true
+			}
 		}
 	}
 
@@ -102,9 +106,10 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 	return data, nil
 }
 
-// extractScriptParts extracts string parts from an OP_RETURN script
-func extractScriptParts(ls *script.Script) ([]string, error) {
-	var parts []string
+// extractTapes parses an OP_RETURN script into tapes (segments separated by pipe |)
+func extractTapes(ls *script.Script) ([][]string, error) {
+	var tapes [][]string
+	var currentTape []string
 
 	scriptBytes := *ls
 	index := 0
@@ -132,51 +137,67 @@ func extractScriptParts(ls *script.Script) ([]string, error) {
 
 		// Handle different push opcodes
 		switch {
-		case opcode <= OpPUSHDATA4:
+		case opcode > 0 && opcode <= 75:
 			// Direct push (1-75 bytes)
-			if opcode > 0 && opcode <= 75 {
-				dataLen = int(opcode)
-			} else if opcode == OpPUSHDATA1 {
-				if index >= len(scriptBytes) {
-					return parts, nil
-				}
-				dataLen = int(scriptBytes[index])
-				index++
-			} else if opcode == OpPUSHDATA2 {
-				if index+1 >= len(scriptBytes) {
-					return parts, nil
-				}
-				dataLen = int(scriptBytes[index]) | int(scriptBytes[index+1])<<8
-				index += 2
-			} else if opcode == OpPUSHDATA4 {
-				if index+3 >= len(scriptBytes) {
-					return parts, nil
-				}
-				dataLen = int(scriptBytes[index]) |
-					int(scriptBytes[index+1])<<8 |
-					int(scriptBytes[index+2])<<16 |
-					int(scriptBytes[index+3])<<24
-				index += 4
+			dataLen = int(opcode)
+		case opcode == OpPUSHDATA1:
+			if index >= len(scriptBytes) {
+				break
 			}
+			dataLen = int(scriptBytes[index])
+			index++
+		case opcode == OpPUSHDATA2:
+			if index+1 >= len(scriptBytes) {
+				break
+			}
+			dataLen = int(scriptBytes[index]) | int(scriptBytes[index+1])<<8
+			index += 2
+		case opcode == OpPUSHDATA4:
+			if index+3 >= len(scriptBytes) {
+				break
+			}
+			dataLen = int(scriptBytes[index]) |
+				int(scriptBytes[index+1])<<8 |
+				int(scriptBytes[index+2])<<16 |
+				int(scriptBytes[index+3])<<24
+			index += 4
+		default:
+			// Unknown opcode, skip
+			continue
+		}
 
-			// Extract the data
-			if index+dataLen > len(scriptBytes) {
-				return parts, nil
-			}
-			data = scriptBytes[index : index+dataLen]
-			index += dataLen
+		// Extract the data
+		if index+dataLen > len(scriptBytes) {
+			break
+		}
+		data = scriptBytes[index : index+dataLen]
+		index += dataLen
 
-			// Try to convert to string, otherwise use hex
-			str := string(data)
-			if isPrintable(str) {
-				parts = append(parts, str)
-			} else {
-				parts = append(parts, hex.EncodeToString(data))
+		// Check for pipe separator
+		if len(data) == 1 && data[0] == OpPipe {
+			// Start a new tape
+			if len(currentTape) > 0 {
+				tapes = append(tapes, currentTape)
+				currentTape = nil
 			}
+			continue
+		}
+
+		// Try to convert to string, otherwise use hex
+		str := string(data)
+		if isPrintable(str) {
+			currentTape = append(currentTape, str)
+		} else {
+			currentTape = append(currentTape, hex.EncodeToString(data))
 		}
 	}
 
-	return parts, nil
+	// Don't forget the last tape
+	if len(currentTape) > 0 {
+		tapes = append(tapes, currentTape)
+	}
+
+	return tapes, nil
 }
 
 // isPrintable checks if a string contains only printable characters
