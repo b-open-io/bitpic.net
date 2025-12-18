@@ -29,7 +29,13 @@ export const metadata: Metadata = {
     title: "bitpic.net - Your avatar on bitcoin, forever",
     description: "Store your avatar on the Bitcoin blockchain with bitpic.",
     type: "website",
-    images: ["/avatar.png"],
+    images: ["/og-image.jpg"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "bitpic.net - Your avatar on bitcoin, forever",
+    description: "Store your avatar on the Bitcoin blockchain with bitpic.",
+    images: ["/og-image.jpg"],
   },
 };
 

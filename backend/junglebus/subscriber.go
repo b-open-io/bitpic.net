@@ -40,7 +40,8 @@ func NewSubscriber(junglebusURL, subscriptionID string, redis *storage.RedisClie
 		junglebusURL:   junglebusURL,
 		redis:          redis,
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			// No timeout for SSE - connections must stay open indefinitely
+			Timeout: 0,
 		},
 	}
 }
@@ -102,27 +103,39 @@ func (s *Subscriber) connect(url string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	log.Println("Connected to JungleBus, listening for transactions...")
 	s.connected = true
+	s.syncing = false
 
 	// Read SSE stream
 	buffer := make([]byte, 0, 8192)
+	lastActivity := time.Now()
 
 	for {
 		// Read line by line from the SSE stream
 		line, err := s.readLine(resp.Body, &buffer)
 		if err != nil {
 			if err == io.EOF {
-				return fmt.Errorf("connection closed")
+				return fmt.Errorf("connection closed by server")
 			}
 			return fmt.Errorf("failed to read stream: %w", err)
 		}
 
-		// Skip empty lines and comment lines
-		if len(line) == 0 || line[0] == ':' {
+		lastActivity = time.Now()
+		_ = lastActivity // Track activity for potential timeout handling
+
+		// Skip empty lines
+		if len(line) == 0 {
+			continue
+		}
+
+		// SSE comment/keepalive (starts with :)
+		if line[0] == ':' {
+			// This is a keep-alive ping from the server
 			continue
 		}
 
