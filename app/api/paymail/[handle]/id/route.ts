@@ -29,9 +29,12 @@ export async function GET(
 
     const data = await response.json();
 
+    // Return full paymail address in handle field per BRC-29
+    const fullPaymail = `${handle}@bitpic.net`;
+
     return NextResponse.json({
       bsvalias: "1.0",
-      handle: data.handle || handle,
+      handle: fullPaymail,
       pubkey: data.identityPubkey,
     });
   } catch (error) {

@@ -40,9 +40,12 @@ export async function GET(
     const match =
       data.identityPubkey.toLowerCase() === pubkey.toLowerCase();
 
+    // Return full paymail address per BRC-29
+    const fullPaymail = `${handle}@bitpic.net`;
+
     return NextResponse.json({
       match,
-      handle: data.handle || handle,
+      handle: fullPaymail,
     });
   } catch (error) {
     console.error("Verify pubkey endpoint error:", error);
