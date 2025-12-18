@@ -1,6 +1,7 @@
 package bitpic
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -31,6 +32,7 @@ type BitPicData struct {
 	Paymail   string
 	PubKey    string
 	Signature string
+	ImageHash string // SHA256 hash of image data (hex)
 	Outpoint  string // Format: txid_vout
 	TxID      string
 	Timestamp int64
@@ -51,6 +53,7 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 	// Find BitPic protocol data
 	bitpicFound := false
 	bProtocolFound := false
+	var imageData []byte
 
 	for i, output := range tx.Outputs {
 		ls := output.LockingScript
@@ -60,35 +63,31 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 			continue
 		}
 
-		// Parse the script into tapes (segments separated by pipe |)
-		tapes, err := extractTapes(ls)
+		// Parse the script into tapes with raw binary data
+		tapes, rawTapes, err := extractTapesWithRaw(ls)
 		if err != nil {
 			continue
 		}
 
 		// Search each tape for protocol prefixes
-		for _, tape := range tapes {
+		for ti, tape := range tapes {
 			if len(tape) < 1 {
 				continue
 			}
 
-			// Check for BitPic prefix
-			if tape[0] == BitPicPrefix && !bitpicFound {
-				if len(tape) >= 4 {
-					data.Paymail = tape[1]
-					data.PubKey = tape[2]
-					data.Signature = tape[3]
-					bitpicFound = true
-					fmt.Printf("DEBUG %s: BitPic found paymail=%s\n", txid[:8], data.Paymail)
-				} else {
-					fmt.Printf("DEBUG %s: BitPic tape too short, len=%d\n", txid[:8], len(tape))
-				}
+			// Check for B protocol (image data) - need to get this first for hash
+			if tape[0] == BProtocolPrefix && !bProtocolFound && len(rawTapes[ti]) >= 2 {
+				data.Outpoint = fmt.Sprintf("%s_%d", txid, i)
+				imageData = rawTapes[ti][1] // Raw image bytes
+				bProtocolFound = true
 			}
 
-			// Check for B protocol (image data)
-			if tape[0] == BProtocolPrefix && !bProtocolFound {
-				data.Outpoint = fmt.Sprintf("%s_%d", txid, i)
-				bProtocolFound = true
+			// Check for BitPic prefix
+			if tape[0] == BitPicPrefix && !bitpicFound && len(tape) >= 4 {
+				data.Paymail = tape[1]
+				data.PubKey = tape[2]
+				data.Signature = tape[3]
+				bitpicFound = true
 			}
 		}
 	}
@@ -101,19 +100,27 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 		return nil, errors.New("B protocol (image) data not found in transaction")
 	}
 
-	// Verify the signature
-	if err := VerifySignature(data.Paymail, data.PubKey, data.Signature); err != nil {
-		fmt.Printf("DEBUG %s: sig verify failed: %v\n", txid[:8], err)
+	// Hash the image data
+	if len(imageData) == 0 {
+		return nil, errors.New("no image data found in B protocol")
+	}
+	hash := sha256.Sum256(imageData)
+	data.ImageHash = hex.EncodeToString(hash[:])
+
+	// Verify the signature against the image hash
+	if err := VerifySignature(data.ImageHash, data.PubKey, data.Signature); err != nil {
 		return nil, fmt.Errorf("signature verification failed: %w", err)
 	}
 
 	return data, nil
 }
 
-// extractTapes parses an OP_RETURN script into tapes (segments separated by pipe |)
-func extractTapes(ls *script.Script) ([][]string, error) {
+// extractTapesWithRaw parses an OP_RETURN script into tapes with both string and raw representations
+func extractTapesWithRaw(ls *script.Script) ([][]string, [][][]byte, error) {
 	var tapes [][]string
+	var rawTapes [][][]byte
 	var currentTape []string
+	var currentRawTape [][]byte
 
 	scriptBytes := *ls
 	index := 0
@@ -128,6 +135,11 @@ func extractTapes(ls *script.Script) ([][]string, error) {
 			index++
 			continue
 		}
+		// Handle case where script starts with just OP_RETURN
+		if index == 0 && scriptBytes[index] == OpRETURN {
+			index++
+			continue
+		}
 
 		if index >= len(scriptBytes) {
 			break
@@ -137,7 +149,6 @@ func extractTapes(ls *script.Script) ([][]string, error) {
 		index++
 
 		var dataLen int
-		var data []byte
 
 		// Handle different push opcodes
 		switch {
@@ -174,7 +185,8 @@ func extractTapes(ls *script.Script) ([][]string, error) {
 		if index+dataLen > len(scriptBytes) {
 			break
 		}
-		data = scriptBytes[index : index+dataLen]
+		data := make([]byte, dataLen)
+		copy(data, scriptBytes[index:index+dataLen])
 		index += dataLen
 
 		// Check for pipe separator
@@ -182,10 +194,15 @@ func extractTapes(ls *script.Script) ([][]string, error) {
 			// Start a new tape
 			if len(currentTape) > 0 {
 				tapes = append(tapes, currentTape)
+				rawTapes = append(rawTapes, currentRawTape)
 				currentTape = nil
+				currentRawTape = nil
 			}
 			continue
 		}
+
+		// Store raw data
+		currentRawTape = append(currentRawTape, data)
 
 		// Try to convert to string, otherwise use hex
 		str := string(data)
@@ -199,9 +216,10 @@ func extractTapes(ls *script.Script) ([][]string, error) {
 	// Don't forget the last tape
 	if len(currentTape) > 0 {
 		tapes = append(tapes, currentTape)
+		rawTapes = append(rawTapes, currentRawTape)
 	}
 
-	return tapes, nil
+	return tapes, rawTapes, nil
 }
 
 // isPrintable checks if a string contains only printable characters
