@@ -1,13 +1,12 @@
 package junglebus
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"context"
 	"log"
-	"net/http"
 	"time"
 
+	"github.com/GorillaPool/go-junglebus"
+	"github.com/GorillaPool/go-junglebus/models"
 	"github.com/b-open-io/bitpic/bitpic"
 	"github.com/b-open-io/bitpic/storage"
 )
@@ -17,20 +16,12 @@ type Subscriber struct {
 	subscriptionID string
 	junglebusURL   string
 	redis          *storage.RedisClient
-	client         *http.Client
+	client         *junglebus.Client
+	subscription   *junglebus.Subscription
 	connected      bool
 	syncing        bool
 	lastBlock      uint64
 	lastBlockTime  time.Time
-}
-
-// JungleBusMessage represents a message from JungleBus
-type JungleBusMessage struct {
-	ID          string `json:"id"`
-	Transaction string `json:"transaction"` // hex encoded
-	BlockHash   string `json:"block_hash"`
-	BlockHeight uint64 `json:"block_height"`
-	BlockTime   uint64 `json:"block_time"`
 }
 
 // NewSubscriber creates a new JungleBus subscriber
@@ -39,15 +30,20 @@ func NewSubscriber(junglebusURL, subscriptionID string, redis *storage.RedisClie
 		subscriptionID: subscriptionID,
 		junglebusURL:   junglebusURL,
 		redis:          redis,
-		client: &http.Client{
-			// No timeout for SSE - connections must stay open indefinitely
-			Timeout: 0,
-		},
 	}
 }
 
 // Start begins listening to JungleBus subscription
 func (s *Subscriber) Start() error {
+	// Create JungleBus client
+	client, err := junglebus.New(
+		junglebus.WithHTTP(s.junglebusURL),
+	)
+	if err != nil {
+		return err
+	}
+	s.client = client
+
 	// Get last block from Redis
 	lastBlock, err := s.redis.GetLastBlock()
 	if err != nil {
@@ -55,29 +51,45 @@ func (s *Subscriber) Start() error {
 		lastBlock = 0
 	}
 
-	// Build subscription URL with fromBlock parameter if we have a last block
-	var url string
 	if lastBlock > 0 {
-		url = fmt.Sprintf("%s/v1/subscribe/%s?fromBlock=%d", s.junglebusURL, s.subscriptionID, lastBlock)
 		log.Printf("Resuming from block %d", lastBlock)
 	} else {
-		url = fmt.Sprintf("%s/v1/subscribe/%s", s.junglebusURL, s.subscriptionID)
 		log.Printf("Starting from current tip")
 	}
 
 	log.Printf("Connecting to JungleBus subscription: %s", s.subscriptionID)
 
-	for {
-		s.syncing = true
-		err := s.connect(url)
-		s.connected = false
-		if err != nil {
-			log.Printf("JungleBus connection error: %v", err)
-			log.Println("Reconnecting in 5 seconds...")
-			time.Sleep(5 * time.Second)
-			continue
-		}
+	// Set up event handlers
+	eventHandler := junglebus.EventHandler{
+		OnTransaction: s.onTransaction,
+		OnMempool:     s.onMempool,
+		OnStatus:      s.onStatus,
+		OnError:       s.onError,
 	}
+
+	// Subscribe with queue for better performance
+	subscription, err := client.SubscribeWithQueue(
+		context.Background(),
+		s.subscriptionID,
+		lastBlock,
+		0, // Use server default queue
+		eventHandler,
+		&junglebus.SubscribeOptions{
+			QueueSize: 10000,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	s.subscription = subscription
+	s.connected = true
+	s.syncing = true
+
+	log.Println("Connected to JungleBus, listening for transactions...")
+
+	// Block forever - the subscription runs in its own goroutine
+	select {}
 }
 
 // GetStatus returns the current subscriber status
@@ -85,142 +97,77 @@ func (s *Subscriber) GetStatus() (connected bool, syncing bool, lastBlock uint64
 	return s.connected, s.syncing, s.lastBlock, s.lastBlockTime
 }
 
-// connect establishes SSE connection to JungleBus
-func (s *Subscriber) connect(url string) error {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+// onTransaction handles confirmed transactions
+func (s *Subscriber) onTransaction(tx *models.TransactionResponse) {
+	s.processTransaction(tx, true)
+}
+
+// onMempool handles unconfirmed transactions
+func (s *Subscriber) onMempool(tx *models.TransactionResponse) {
+	s.processTransaction(tx, false)
+}
+
+// onStatus handles status updates
+func (s *Subscriber) onStatus(status *models.ControlResponse) {
+	if status.StatusCode == 200 {
+		s.syncing = false
+		log.Printf("JungleBus sync complete at block %d", status.Block)
+	} else if status.StatusCode == 100 {
+		s.syncing = true
 	}
 
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Cache-Control", "no-cache")
-	req.Header.Set("Connection", "keep-alive")
+	// Update last block
+	if status.Block > 0 {
+		s.lastBlock = uint64(status.Block)
+		s.lastBlockTime = time.Now()
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	log.Println("Connected to JungleBus, listening for transactions...")
-	s.connected = true
-	s.syncing = false
-
-	// Read SSE stream
-	buffer := make([]byte, 0, 8192)
-	lastActivity := time.Now()
-
-	for {
-		// Read line by line from the SSE stream
-		line, err := s.readLine(resp.Body, &buffer)
-		if err != nil {
-			if err == io.EOF {
-				return fmt.Errorf("connection closed by server")
-			}
-			return fmt.Errorf("failed to read stream: %w", err)
-		}
-
-		lastActivity = time.Now()
-		_ = lastActivity // Track activity for potential timeout handling
-
-		// Skip empty lines
-		if len(line) == 0 {
-			continue
-		}
-
-		// SSE comment/keepalive (starts with :)
-		if line[0] == ':' {
-			// This is a keep-alive ping from the server
-			continue
-		}
-
-		// Parse SSE data field
-		if len(line) > 6 && string(line[0:6]) == "data: " {
-			data := line[6:]
-
-			var msg JungleBusMessage
-			if err := json.Unmarshal(data, &msg); err != nil {
-				log.Printf("Failed to unmarshal message: %v", err)
-				continue
-			}
-
-			// Process transaction
-			if err := s.processTransaction(&msg); err != nil {
-				log.Printf("Failed to process transaction: %v", err)
-			}
+		// Persist to Redis
+		if err := s.redis.SetLastBlock(uint64(status.Block)); err != nil {
+			log.Printf("Warning: failed to persist last block: %v", err)
 		}
 	}
 }
 
-// readLine reads a single line from the stream
-func (s *Subscriber) readLine(r io.Reader, buffer *[]byte) ([]byte, error) {
-	*buffer = (*buffer)[:0]
-	buf := make([]byte, 1)
-
-	for {
-		n, err := r.Read(buf)
-		if err != nil {
-			return *buffer, err
-		}
-
-		if n == 0 {
-			continue
-		}
-
-		if buf[0] == '\n' {
-			return *buffer, nil
-		}
-
-		if buf[0] != '\r' {
-			*buffer = append(*buffer, buf[0])
-		}
-	}
+// onError handles errors
+func (s *Subscriber) onError(err error) {
+	log.Printf("JungleBus error: %v", err)
+	s.connected = false
 }
 
 // processTransaction processes a transaction from JungleBus
-func (s *Subscriber) processTransaction(msg *JungleBusMessage) error {
-	// Update last block info if this is from a block
-	if msg.BlockHeight > 0 {
-		s.lastBlock = msg.BlockHeight
-		s.lastBlockTime = time.Unix(int64(msg.BlockTime), 0)
+func (s *Subscriber) processTransaction(tx *models.TransactionResponse, confirmed bool) {
+	// Update last block info if this is a confirmed transaction
+	if confirmed && tx.BlockHeight > 0 {
+		s.lastBlock = uint64(tx.BlockHeight)
+		s.lastBlockTime = time.Unix(int64(tx.BlockTime), 0)
 
 		// Persist to Redis
-		if err := s.redis.SetLastBlock(msg.BlockHeight); err != nil {
+		if err := s.redis.SetLastBlock(uint64(tx.BlockHeight)); err != nil {
 			log.Printf("Warning: failed to persist last block: %v", err)
 		}
 	}
 
-	// Decode hex transaction
-	txBytes, err := hexDecode(msg.Transaction)
-	if err != nil {
-		return fmt.Errorf("failed to decode transaction: %w", err)
-	}
+	// Transaction is already bytes from JungleBus
+	txBytes := tx.Transaction
 
 	// Parse BitPic data
 	data, err := bitpic.ParseTransaction(txBytes)
 	if err != nil {
 		// Not a BitPic transaction, ignore
-		return nil
+		return
 	}
 
 	// Use block time if available, otherwise use current time
-	timestamp := int64(msg.BlockTime)
+	timestamp := int64(tx.BlockTime)
 	if timestamp == 0 {
 		timestamp = time.Now().Unix()
 	}
 	data.Timestamp = timestamp
 
-	// Determine confirmation status (confirmed if block hash exists)
-	confirmed := msg.BlockHash != ""
-
 	// Store in Redis
-	if err := s.redis.SetAvatar(data.Paymail, data.Outpoint, msg.ID, timestamp, confirmed); err != nil {
-		return fmt.Errorf("failed to store avatar: %w", err)
+	if err := s.redis.SetAvatar(data.Paymail, data.Outpoint, tx.Id, timestamp, confirmed); err != nil {
+		log.Printf("Failed to store avatar: %v", err)
+		return
 	}
 
 	status := "unconfirmed"
@@ -228,24 +175,4 @@ func (s *Subscriber) processTransaction(msg *JungleBusMessage) error {
 		status = "confirmed"
 	}
 	log.Printf("New BitPic avatar (%s): %s -> %s", status, data.Paymail, data.Outpoint)
-
-	return nil
-}
-
-// hexDecode decodes a hex string to bytes
-func hexDecode(s string) ([]byte, error) {
-	if len(s)%2 != 0 {
-		return nil, fmt.Errorf("hex string must have even length")
-	}
-
-	bytes := make([]byte, len(s)/2)
-	for i := 0; i < len(s); i += 2 {
-		var b byte
-		_, err := fmt.Sscanf(s[i:i+2], "%02x", &b)
-		if err != nil {
-			return nil, fmt.Errorf("invalid hex character at position %d: %w", i, err)
-		}
-		bytes[i/2] = b
-	}
-	return bytes, nil
 }
