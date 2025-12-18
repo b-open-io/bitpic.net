@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatFeeUSD } from "@/lib/config";
 
 export default function PaymailPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -33,7 +34,7 @@ export default function PaymailPage() {
               onClick={() => setRegisterOpen(true)}
               className="font-semibold"
             >
-              Register Now - $1
+              Register Now - {formatFeeUSD()}
             </Button>
           </div>
         </div>
@@ -124,7 +125,11 @@ export default function PaymailPage() {
                 title: "Connect Wallet",
                 desc: "Link your Yours Wallet",
               },
-              { step: 3, title: "Pay $1", desc: "One-time registration fee" },
+              {
+                step: 3,
+                title: `Pay ${formatFeeUSD()}`,
+                desc: "One-time registration fee",
+              },
               {
                 step: 4,
                 title: "You're Live",

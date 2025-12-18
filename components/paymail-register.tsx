@@ -14,6 +14,11 @@ import {
 import { Input } from "@/components/ui/input";
 import type { RegisterPaymailRequest } from "@/lib/api";
 import { api } from "@/lib/api";
+import {
+  PAYMAIL_FEE_USD,
+  estimateFeeSatoshis,
+  formatFeeUSD,
+} from "@/lib/config";
 import { useWallet } from "@/lib/use-wallet";
 
 interface PaymailRegisterProps {
@@ -230,7 +235,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
             <DialogHeader>
               <DialogTitle>Complete Payment</DialogTitle>
               <DialogDescription>
-                Pay $1 to register your paymail address
+                Pay {formatFeeUSD()} to register your paymail address
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -242,10 +247,14 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                   </span>
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Cost: <span className="font-mono text-foreground">$1.00</span>
+                  Cost:{" "}
+                  <span className="font-mono text-foreground">
+                    {formatFeeUSD()}
+                  </span>
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  (~20,000 satoshis based on current rate)
+                  (~{estimateFeeSatoshis().toLocaleString()} satoshis based on
+                  current rate)
                 </p>
               </div>
               {handleError && (
