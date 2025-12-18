@@ -119,10 +119,8 @@ func (s *Subscriber) onStatus(status *models.ControlResponse) {
 	case "block-done":
 		s.lastBlock = uint64(status.Block)
 		s.lastBlockTime = time.Now()
-		// Save progress silently every 1000 blocks
-		if status.Block%1000 == 0 {
-			s.redis.SetLastBlock(uint64(status.Block))
-		}
+		// Save progress every block (silently)
+		s.redis.SetLastBlock(uint64(status.Block))
 	case "error":
 		log.Printf("JungleBus error: %s", status.Message)
 	}
