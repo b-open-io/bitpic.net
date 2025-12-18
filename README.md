@@ -1,185 +1,112 @@
 # bitpic.net
 
-Your own avatar on bitcoin, forever.
+![BitPic](public/og-image.jpg)
 
-## Overview
+Gravatar for Bitcoin. Store your avatar on-chain, use it everywhere.
 
-bitpic.net is a Bitcoin avatar service that allows users to store their avatars permanently on the Bitcoin blockchain. Built with Next.js 16, React 19, and Tailwind CSS v4.
+## What is BitPic?
 
-## Tech Stack
+BitPic is a protocol for hosting Paymail avatars on the Bitcoin blockchain. Instead of storing images on proprietary servers, BitPic stores them permanently on-chain, signed by your identity key.
 
-- **Framework**: Next.js 16 (App Router)
-- **UI Library**: React 19
-- **Styling**: Tailwind CSS v4
-- **Component System**: shadcn/ui (New York style)
-- **Icons**: Lucide React
-- **Linting**: Biome
-- **Fonts**: Geist Sans & Geist Mono
-- **Runtime**: Bun
+- Uses [Paymail](https://bsvalias.org/) addresses instead of email
+- Images stored 100% on Bitcoin, not a database
+- Open protocol - anyone can run a BitPic node
+- Mutable - upload a new avatar and it updates everywhere
 
-## Design System
+## Usage
 
-### Color Palette
+Once uploaded, reference your avatar from anywhere:
 
-The design uses a warm, Japanese minimalist aesthetic with:
-
-- **Primary**: Warm amber/gold `hsl(35 92% 50%)`
-- **Background (Light)**: Warm cream `hsl(40 20% 98%)`
-- **Background (Dark)**: Charcoal `hsl(20 14.3% 4.1%)`
-- **Border Radius**: Sharp corners `0.25rem`
-
-### Typography
-
-- **UI Text**: Geist Sans
-- **Data/Code**: Geist Mono (paymails, addresses)
-
-### Design Principles
-
-1. Japanese minimalism aesthetic
-2. No emojis
-3. Sharp corners (rounded-sm)
-4. Grayscale filter on images, remove on hover
-5. Gold/amber used sparingly - only for brand moments
-6. Wide margins, centered layouts (max-w-7xl)
-
-## Project Structure
-
-```
-bitpic.net/
-├── app/
-│   ├── globals.css          # Theme configuration
-│   ├── layout.tsx            # Root layout with metadata
-│   └── page.tsx              # Home page with mock data
-├── components/
-│   ├── ui/                   # shadcn/ui primitives
-│   │   ├── card.tsx
-│   │   ├── button.tsx
-│   │   ├── input.tsx
-│   │   ├── badge.tsx
-│   │   ├── separator.tsx
-│   │   └── skeleton.tsx
-│   ├── header.tsx            # Sticky header with nav
-│   ├── hero.tsx              # Hero section with upload
-│   ├── avatar-card.tsx       # Avatar card component
-│   ├── feed.tsx              # Feed with mempool/immutable
-│   └── footer.tsx            # Simple footer
-├── lib/
-│   └── utils.ts              # Utility functions (cn)
-└── public/
-    └── avatar.svg            # Placeholder avatar
+```html
+<img src="https://bitpic.net/u/yourname@example.com">
 ```
 
-## Components
+### Image Sizing
 
-### Header
+Request specific sizes with the `size` parameter:
 
-- Sticky header with backdrop blur
-- Logo with avatar.svg + "bitpic" text
-- Desktop navigation (About, API, GitHub)
-- Search input with bottom-border style
-- Mobile menu with hamburger icon
+```
+https://bitpic.net/u/yourname@example.com?size=128
+```
 
-### Hero
+Supported sizes: `32`, `64`, `128`, `256`, `512`
 
-- "v2.0 Beta" badge with amber styling
-- Large headline with light font weight
-- Upload CTA with dashed border
-- Drag-and-drop support
-- Hover state changes border to primary color
+### Default Fallback
 
-### AvatarCard
+Specify a fallback image for paymails without an avatar:
 
-- 1:1 aspect ratio image
-- Grayscale filter, removes on hover
-- Hover shows copy button overlay
-- Footer with truncated paymail and timestamp
-- Border changes to primary on hover
+```
+https://bitpic.net/u/unknown@example.com?d=https://example.com/fallback.png
+```
 
-### Feed
+## Protocol
 
-- **Mempool Section**: Pulsing amber dot, pending uploads
-- **Separator**: Divides sections
-- **Immutable Section**: Green dot, confirmed uploads
-- Responsive grid: 2-6 columns based on screen size
-- Skeleton loading states
+BitPic uses [B Protocol](https://b.bitdb.network/) for file storage with a BitPic-specific prefix:
 
-### Footer
+```
+OP_0
+OP_RETURN
+19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut    # B Protocol
+  [Image Binary]
+  image/jpeg
+  binary
+|
+18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p    # BitPic Protocol
+  [Paymail]
+  [Pubkey]
+  [Signature]
+```
 
-- Centered copyright text
-- Mono font, muted color
+| Prefix | Protocol |
+|--------|----------|
+| `19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut` | B (file storage) |
+| `18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p` | BitPic (avatar binding) |
 
-## Getting Started
+## API
 
-### Install Dependencies
+| Endpoint | Description |
+|----------|-------------|
+| `GET /u/<paymail>` | Avatar image (embeddable) |
+| `GET /u/<paymail>?size=128` | Resized avatar |
+| `GET /u/<paymail>?d=<url>` | Avatar with fallback |
+| `GET /api/avatar/<paymail>` | Avatar metadata (JSON) |
+| `GET /api/exists/<paymail>` | Check if avatar exists |
+| `GET /api/feed` | Recent uploads |
+| `POST /api/broadcast` | Broadcast transaction |
+
+Full API documentation: [bitpic.net/docs](https://bitpic.net/docs)
+
+## Paymail Registration
+
+Register a `@bitpic.net` paymail at [bitpic.net/paymail](https://bitpic.net/paymail).
+
+Includes:
+- Avatar hosting
+- Payment address resolution
+- Ordinals receive address
+
+## Development
 
 ```bash
+# Install
 bun install
-```
 
-### Development Server
-
-```bash
+# Run frontend
 bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+# Run backend
+cd backend && go run .
 
-### Build for Production
-
-```bash
-bun run build
-```
-
-### Lint
-
-```bash
+# Lint
 bun run lint
 ```
 
-### Format
+## Tech Stack
 
-```bash
-bun run format
-```
-
-## Configuration
-
-### Tailwind Theme
-
-Theme configuration is in `app/globals.css` using Tailwind v4's `@theme inline` directive. All colors, spacing, and typography are defined using CSS variables for easy theming and dark mode support.
-
-### shadcn/ui
-
-Configuration is in `components.json`:
-
-- Style: New York
-- Base color: Neutral
-- CSS variables: Yes
-- Components path: `@/components/ui`
-
-## Mock Data
-
-The application currently uses mock data in `app/page.tsx`:
-
-- 12 confirmed avatars
-- 2 unconfirmed avatars
-
-Replace with real API calls when backend is ready.
-
-## Accessibility
-
-- Semantic HTML throughout
-- ARIA labels on interactive elements
-- Keyboard navigation support
-- Focus indicators on all interactive elements
-- Screen reader friendly
-
-## Browser Support
-
-- Modern browsers with ES2017+ support
-- Dark mode support via `prefers-color-scheme`
-- Responsive design for mobile, tablet, and desktop
+- **Frontend**: Next.js 16, React 19, Tailwind CSS v4
+- **Backend**: Go, Fiber, Redis
+- **Blockchain**: JungleBus subscription, ARC broadcast
 
 ## License
 
-Private project.
+MIT
