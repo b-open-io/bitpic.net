@@ -26,4 +26,5 @@ export interface AvatarData {
   paymail: string;
   imageUrl: string;
   timestamp: string;
+  txid: string;
 }

@@ -27,7 +27,8 @@ export function Hero() {
         </h1>
 
         {/* Upload CTA */}
-        <div
+        <button
+          type="button"
           className={`w-full max-w-xl mt-8 border-2 border-dashed rounded-sm p-12 transition-all cursor-pointer ${
             isDragging
               ? "border-primary bg-primary/5"
@@ -50,13 +51,6 @@ export function Hero() {
           onClick={() => {
             router.push("/upload");
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              router.push("/upload");
-            }
-          }}
-          role="button"
-          tabIndex={0}
           aria-label="Upload avatar image"
         >
           <div className="flex flex-col items-center gap-4">
@@ -74,7 +68,7 @@ export function Hero() {
               </p>
             </div>
           </div>
-        </div>
+        </button>
       </div>
     </section>
   );

@@ -301,7 +301,10 @@
                   "type": "object",
                   "properties": {
                     "success": { "type": "boolean" },
-                    "paymail": { "type": "string", "example": "alice@bitpic.net" }
+                    "paymail": {
+                      "type": "string",
+                      "example": "alice@bitpic.net"
+                    }
                   }
                 }
               }
@@ -443,6 +446,9 @@
     { "name": "Feed", "description": "Recent avatar feed" },
     { "name": "Status", "description": "Service status and health" },
     { "name": "Broadcast", "description": "Transaction broadcasting" },
-    { "name": "Paymail", "description": "Paymail registration and resolution (BRC-29)" }
+    {
+      "name": "Paymail",
+      "description": "Paymail registration and resolution (BRC-29)"
+    }
   ]
 }

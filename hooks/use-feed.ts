@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { FeedResponse, AvatarData } from "@/lib/types";
+import type { AvatarData, FeedResponse } from "@/lib/types";
 import { formatRelativeTime, getAvatarUrl } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -32,6 +32,7 @@ export function useFeed() {
           paymail: item.paymail,
           imageUrl: item.url || getAvatarUrl(item.paymail),
           timestamp: formatRelativeTime(item.timestamp),
+          txid: item.txid,
         }));
 
       const unconfirmed = data.items
@@ -40,6 +41,7 @@ export function useFeed() {
           paymail: item.paymail,
           imageUrl: item.url || getAvatarUrl(item.paymail),
           timestamp: "pending",
+          txid: item.txid,
         }));
 
       return { confirmed, unconfirmed };

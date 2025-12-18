@@ -203,16 +203,17 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
       <CardContent>
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md">
+          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md">
             {error}
           </div>
         )}
 
         {step === "upload" && (
-          <div
+          <section
             onDrop={handleDrop}
             onDragOver={handleDragOver}
-            className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-gray-400 transition-colors cursor-pointer"
+            className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-muted-foreground transition-colors cursor-pointer"
+            aria-label="File drop zone"
           >
             <input
               type="file"
@@ -224,7 +225,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
             <label htmlFor="file-upload" className="cursor-pointer">
               <div className="space-y-2">
                 <svg
-                  className="mx-auto h-12 w-12 text-gray-400"
+                  className="mx-auto h-12 w-12 text-muted-foreground"
                   stroke="currentColor"
                   fill="none"
                   viewBox="0 0 48 48"
@@ -238,16 +239,18 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                     strokeLinejoin="round"
                   />
                 </svg>
-                <div className="text-gray-600">
-                  <span className="font-medium text-blue-600 hover:text-blue-500">
+                <div className="text-muted-foreground">
+                  <span className="font-medium text-primary hover:text-primary/80">
                     Click to upload
                   </span>{" "}
                   or drag and drop
                 </div>
-                <p className="text-xs text-gray-500">PNG or JPEG up to 1MB</p>
+                <p className="text-xs text-muted-foreground">
+                  PNG or JPEG up to 1MB
+                </p>
               </div>
             </label>
-          </div>
+          </section>
         )}
 
         {step === "crop" && selectedImage && (
@@ -265,6 +268,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           <div className="space-y-4">
             {croppedImage && (
               <div className="flex justify-center mb-4">
+                {/* biome-ignore lint/performance/noImgElement: blob URL from canvas crop cannot use Next Image */}
                 <img
                   src={croppedImage}
                   alt="Cropped avatar preview"
@@ -275,7 +279,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
             {!isConnected ? (
               <div className="space-y-4">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Connect your Yours Wallet to continue
                 </p>
                 <Button
@@ -303,7 +307,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                     onChange={(e) => setPaymail(e.target.value)}
                     className="w-full"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Your BitPic will be associated with this paymail
                   </p>
                 </div>
@@ -334,11 +338,11 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
         {step === "sign" && (
           <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4" />
-            <p className="text-gray-600">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4" />
+            <p className="text-muted-foreground">
               Signing and broadcasting transaction...
             </p>
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-muted-foreground mt-2">
               Please confirm in your wallet
             </p>
           </div>
@@ -348,6 +352,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           <div className="text-center space-y-4 py-4">
             {croppedImage && (
               <div className="flex justify-center mb-4">
+                {/* biome-ignore lint/performance/noImgElement: blob URL from canvas crop cannot use Next Image */}
                 <img
                   src={croppedImage}
                   alt="Uploaded avatar"
@@ -356,11 +361,11 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
               </div>
             )}
             <div className="space-y-2">
-              <p className="text-green-600 font-medium">
+              <p className="text-primary font-medium">
                 Avatar uploaded successfully!
               </p>
-              <p className="text-sm text-gray-600">Transaction ID:</p>
-              <code className="block text-xs bg-gray-100 p-2 rounded break-all">
+              <p className="text-sm text-muted-foreground">Transaction ID:</p>
+              <code className="block text-xs bg-muted p-2 rounded break-all font-mono">
                 {txid}
               </code>
             </div>

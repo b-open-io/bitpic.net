@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/lib/use-wallet";
 import { cn } from "@/lib/utils";
@@ -50,7 +51,7 @@ export function Header() {
                 "text-sm font-medium transition-colors hover:text-primary",
                 pathname === link.href
                   ? "text-foreground"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground",
               )}
             >
               {link.label}
@@ -64,6 +65,7 @@ export function Header() {
           >
             <Github className="h-4 w-4" />
           </Link>
+          <ThemeToggle />
         </nav>
 
         {/* Actions */}
@@ -117,7 +119,7 @@ export function Header() {
                   "text-sm font-medium py-1",
                   pathname === link.href
                     ? "text-foreground"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground",
                 )}
               >
                 {link.label}

@@ -21,6 +21,7 @@ export function Feed() {
       <section className="container mx-auto max-w-7xl px-4 py-12">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {Array.from({ length: 12 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
             <div key={i} className="space-y-3">
               <Skeleton className="aspect-square w-full rounded-md" />
               <Skeleton className="h-4 w-3/4" />
@@ -48,8 +49,8 @@ export function Feed() {
 
         {unconfirmed.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {unconfirmed.map((item, idx) => (
-              <div key={`unconfirmed-${idx}`} className="relative group">
+            {unconfirmed.map((item) => (
+              <div key={item.txid} className="relative group">
                 <AvatarCard {...item} />
                 <div className="absolute inset-0 bg-background/20 backdrop-blur-[1px] pointer-events-none rounded-sm border border-primary/20" />
               </div>
@@ -75,8 +76,8 @@ export function Feed() {
 
         {confirmed.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {confirmed.map((item, idx) => (
-              <AvatarCard key={`confirmed-${idx}`} {...item} />
+            {confirmed.map((item) => (
+              <AvatarCard key={item.txid} {...item} />
             ))}
           </div>
         ) : (

@@ -44,17 +44,20 @@ func (s *Subscriber) Start() error {
 	}
 	s.client = client
 
-	// Get last block from Redis
+	// Get last block from Redis, or use default starting block
+	const defaultFromBlock uint64 = 600000 // BitPic genesis block
+
 	lastBlock, err := s.redis.GetLastBlock()
 	if err != nil {
 		log.Printf("Warning: failed to get last block from Redis: %v", err)
-		lastBlock = 0
+		lastBlock = defaultFromBlock
 	}
 
-	if lastBlock > 0 {
-		log.Printf("Resuming from block %d", lastBlock)
+	if lastBlock == 0 {
+		lastBlock = defaultFromBlock
+		log.Printf("Starting from genesis block %d", lastBlock)
 	} else {
-		log.Printf("Starting from current tip")
+		log.Printf("Resuming from block %d", lastBlock)
 	}
 
 	log.Printf("Connecting to JungleBus subscription: %s", s.subscriptionID)

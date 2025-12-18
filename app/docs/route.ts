@@ -5,6 +5,7 @@ export const GET = ApiReference({
   theme: "kepler",
   metaData: {
     title: "BitPic API Documentation",
-    description: "API documentation for BitPic - Your avatar on Bitcoin, forever",
+    description:
+      "API documentation for BitPic - Your avatar on Bitcoin, forever",
   },
 });

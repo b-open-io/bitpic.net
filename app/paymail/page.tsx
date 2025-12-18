@@ -113,10 +113,22 @@ export default function PaymailPage() {
           <h2 className="text-xl font-bold text-center">How It Works</h2>
           <div className="grid gap-4 md:grid-cols-4">
             {[
-              { step: 1, title: "Choose Handle", desc: "Pick your unique handle" },
-              { step: 2, title: "Connect Wallet", desc: "Link your Yours Wallet" },
+              {
+                step: 1,
+                title: "Choose Handle",
+                desc: "Pick your unique handle",
+              },
+              {
+                step: 2,
+                title: "Connect Wallet",
+                desc: "Link your Yours Wallet",
+              },
               { step: 3, title: "Pay $1", desc: "One-time registration fee" },
-              { step: 4, title: "You're Live", desc: "Start using your paymail" },
+              {
+                step: 4,
+                title: "You're Live",
+                desc: "Start using your paymail",
+              },
             ].map((item) => (
               <div key={item.step} className="text-center space-y-2">
                 <div className="mx-auto w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">

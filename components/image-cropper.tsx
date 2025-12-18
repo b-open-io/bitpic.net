@@ -67,7 +67,7 @@ export function ImageCropper({
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Zoom</label>
+        <span className="text-sm font-medium">Zoom</span>
         <Slider
           value={[zoom]}
           onValueChange={([value]) => setZoom(value)}
@@ -75,6 +75,7 @@ export function ImageCropper({
           max={3}
           step={0.1}
           className="w-full"
+          aria-label="Zoom level"
         />
       </div>
 

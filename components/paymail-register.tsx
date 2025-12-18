@@ -72,7 +72,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
       } else {
         setHandleError("This handle is already taken");
       }
-    } catch (error) {
+    } catch {
       setHandleError("Failed to check availability. Please try again.");
     } finally {
       setIsCheckingAvailability(false);
