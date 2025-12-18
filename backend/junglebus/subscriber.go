@@ -119,18 +119,12 @@ func (s *Subscriber) onStatus(status *models.ControlResponse) {
 	case "block-done":
 		s.lastBlock = uint64(status.Block)
 		s.lastBlockTime = time.Now()
-		// Save progress periodically
-		if status.Block%100 == 0 {
-			if err := s.redis.SetLastBlock(uint64(status.Block)); err != nil {
-				log.Printf("Warning: failed to persist block %d: %v", status.Block, err)
-			} else {
-				log.Printf("Block %d done", status.Block)
-			}
+		// Save progress silently every 1000 blocks
+		if status.Block%1000 == 0 {
+			s.redis.SetLastBlock(uint64(status.Block))
 		}
 	case "error":
 		log.Printf("JungleBus error: %s", status.Message)
-	default:
-		log.Printf("JungleBus status: %s at block %d", status.Status, status.Block)
 	}
 }
 
