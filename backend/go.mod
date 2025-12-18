@@ -8,6 +8,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.0
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.4.0
+	golang.org/x/image v0.34.0
 )
 
 require (

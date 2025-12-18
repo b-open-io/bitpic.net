@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 const navLinks = [
   { href: "/upload", label: "Upload" },
   { href: "/paymail", label: "Paymail" },
-  { href: "/docs", label: "API" },
+  { href: "/about", label: "About" },
 ];
 
 export function Header() {
