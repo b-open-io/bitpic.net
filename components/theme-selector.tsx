@@ -202,26 +202,14 @@ export function ThemeSelector() {
           </div>
         )}
 
-        {/* Not Connected State */}
-        {!isConnected && (
-          <div className="p-3 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center">
-              Connect wallet to use theme tokens
-            </p>
-          </div>
-        )}
-
-        {/* Connected but no tokens */}
+        {/* Theme token promo - only show if connected with no tokens */}
         {isConnected && themeTokens.length === 0 && (
           <div className="p-3 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center">
-              No theme tokens in wallet
-            </p>
             <a
               href="https://themetoken.dev"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline block text-center mt-1"
+              className="text-xs text-muted-foreground hover:text-primary block text-center"
             >
               Get a theme token
             </a>
