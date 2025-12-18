@@ -1,32 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import type { StatusResponse } from "@/lib/api";
-import { api } from "@/lib/api";
+import { useStatus } from "@/hooks/use-status";
 
 export function Status() {
-  const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: status, isLoading, isError } = useStatus();
 
-  useEffect(() => {
-    const fetchStatus = async () => {
-      const data = await api.getStatus();
-      setStatus(data);
-      setLoading(false);
-    };
-
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000); // Poll every 30 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
-  if (loading || !status) {
+  if (isLoading) {
     return (
       <Badge variant="outline" className="gap-1.5">
         <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 animate-pulse" />
-        <span className="text-xs">Loading...</span>
+        <span className="text-xs">...</span>
+      </Badge>
+    );
+  }
+
+  if (isError || !status) {
+    return (
+      <Badge variant="outline" className="gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+        <span className="text-xs">Offline</span>
       </Badge>
     );
   }

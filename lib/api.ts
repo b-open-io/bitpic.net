@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// Use empty string for relative URLs - Next.js rewrites handle proxying to backend
+const API_BASE = "";
 
 export interface AvatarResponse {
   paymail: string;

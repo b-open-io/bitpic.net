@@ -1,6 +1,6 @@
 "use client";
 
-import { Image, Mail, Shield, Wallet } from "lucide-react";
+import { ImageIcon, Mail, Shield, Wallet } from "lucide-react";
 import { useState } from "react";
 import { PaymailRegister } from "@/components/paymail-register";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,11 @@ export default function PaymailPage() {
       <div className="space-y-8">
         {/* Hero Section */}
         <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
             Get Your @bitpic.net Paymail
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Secure your unique paymail address on the Bitcoin SV blockchain
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Claim your unique identity on the Bitcoin network
           </p>
           <div className="pt-4">
             <Button
@@ -39,13 +39,13 @@ export default function PaymailPage() {
 
         {/* Features Grid */}
         <div className="grid gap-6 md:grid-cols-2 pt-8">
-          <Card>
+          <Card className="bg-muted/30 border-none shadow-none">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-sm bg-primary/10">
-                  <Image className="h-5 w-5 text-primary" />
+                  <ImageIcon className="h-5 w-5 text-primary" />
                 </div>
-                <CardTitle>Avatar Hosting</CardTitle>
+                <CardTitle className="text-base">Avatar Hosting</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
@@ -56,49 +56,47 @@ export default function PaymailPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-muted/30 border-none shadow-none">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-sm bg-primary/10">
                   <Wallet className="h-5 w-5 text-primary" />
                 </div>
-                <CardTitle>Payment Address</CardTitle>
+                <CardTitle className="text-base">Payment Address</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <CardDescription>
                 Receive BSV payments using your easy-to-remember paymail instead
-                of long wallet addresses. Share handle@bitpic.net instead of
-                cryptic keys.
+                of long wallet addresses.
               </CardDescription>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-muted/30 border-none shadow-none">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-sm bg-primary/10">
                   <Mail className="h-5 w-5 text-primary" />
                 </div>
-                <CardTitle>Ordinals Receive</CardTitle>
+                <CardTitle className="text-base">Ordinals Receive</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <CardDescription>
                 Receive 1Sat Ordinals NFTs directly to your paymail. Your
-                address automatically handles both regular payments and ordinal
-                inscriptions.
+                address handles both regular payments and inscriptions.
               </CardDescription>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-muted/30 border-none shadow-none">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-sm bg-primary/10">
                   <Shield className="h-5 w-5 text-primary" />
                 </div>
-                <CardTitle>On-Chain Identity</CardTitle>
+                <CardTitle className="text-base">On-Chain Identity</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
@@ -112,49 +110,27 @@ export default function PaymailPage() {
 
         {/* How It Works */}
         <div className="pt-8 space-y-6">
-          <h2 className="text-2xl font-bold text-center">How It Works</h2>
+          <h2 className="text-xl font-bold text-center">How It Works</h2>
           <div className="grid gap-4 md:grid-cols-4">
-            <div className="text-center space-y-2">
-              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                1
+            {[
+              { step: 1, title: "Choose Handle", desc: "Pick your unique handle" },
+              { step: 2, title: "Connect Wallet", desc: "Link your Yours Wallet" },
+              { step: 3, title: "Pay $1", desc: "One-time registration fee" },
+              { step: 4, title: "You're Live", desc: "Start using your paymail" },
+            ].map((item) => (
+              <div key={item.step} className="text-center space-y-2">
+                <div className="mx-auto w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
+                  {item.step}
+                </div>
+                <h3 className="font-semibold text-sm">{item.title}</h3>
+                <p className="text-xs text-muted-foreground">{item.desc}</p>
               </div>
-              <h3 className="font-semibold">Choose Handle</h3>
-              <p className="text-sm text-muted-foreground">
-                Pick your unique handle (3-20 characters)
-              </p>
-            </div>
-            <div className="text-center space-y-2">
-              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                2
-              </div>
-              <h3 className="font-semibold">Connect Wallet</h3>
-              <p className="text-sm text-muted-foreground">
-                Link your Yours Wallet
-              </p>
-            </div>
-            <div className="text-center space-y-2">
-              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                3
-              </div>
-              <h3 className="font-semibold">Pay $1</h3>
-              <p className="text-sm text-muted-foreground">
-                One-time registration fee
-              </p>
-            </div>
-            <div className="text-center space-y-2">
-              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                4
-              </div>
-              <h3 className="font-semibold">You're Live</h3>
-              <p className="text-sm text-muted-foreground">
-                Start using your @bitpic.net paymail
-              </p>
-            </div>
+            ))}
           </div>
         </div>
 
         {/* CTA */}
-        <div className="text-center pt-8 pb-4">
+        <div className="text-center pt-8">
           <Button
             size="lg"
             onClick={() => setRegisterOpen(true)}

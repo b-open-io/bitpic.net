@@ -1,0 +1,448 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "BitPic API",
+    "version": "1.0.0",
+    "description": "BitPic - Your avatar on Bitcoin, forever. Store and retrieve avatars linked to paymail addresses on the Bitcoin blockchain.",
+    "contact": {
+      "name": "BitPic",
+      "url": "https://bitpic.net"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://bitpic.net",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/u/{paymail}": {
+      "get": {
+        "summary": "Get Avatar Image",
+        "description": "Returns the avatar image for a paymail address. This is the primary endpoint for embedding avatars.",
+        "operationId": "getAvatarImage",
+        "tags": ["Avatar"],
+        "parameters": [
+          {
+            "name": "paymail",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The paymail address (e.g., alice@example.com)",
+            "example": "satoshi@bitpic.net"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Avatar image",
+            "content": {
+              "image/png": {},
+              "image/jpeg": {},
+              "image/gif": {},
+              "image/webp": {}
+            }
+          },
+          "404": {
+            "description": "No avatar found for this paymail",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/avatar/{paymail}": {
+      "get": {
+        "summary": "Get Avatar Metadata",
+        "description": "Returns metadata about a paymail's avatar including the outpoint and timestamp.",
+        "operationId": "getAvatarMetadata",
+        "tags": ["Avatar"],
+        "parameters": [
+          {
+            "name": "paymail",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The paymail address",
+            "example": "alice@example.com"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Avatar metadata",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AvatarMetadata" }
+              }
+            }
+          },
+          "404": {
+            "description": "Avatar not found"
+          }
+        }
+      }
+    },
+    "/api/exists/{paymail}": {
+      "get": {
+        "summary": "Check Avatar Exists",
+        "description": "Check if an avatar exists for a given paymail address.",
+        "operationId": "checkAvatarExists",
+        "tags": ["Avatar"],
+        "parameters": [
+          {
+            "name": "paymail",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The paymail address",
+            "example": "alice@example.com"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existence check result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "exists": { "type": "boolean" },
+                    "paymail": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/feed": {
+      "get": {
+        "summary": "Get Recent Avatars",
+        "description": "Returns a paginated feed of recently updated avatars.",
+        "operationId": "getFeed",
+        "tags": ["Feed"],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "default": 0 },
+            "description": "Number of items to skip"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 },
+            "description": "Maximum number of items to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feed of recent avatars",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Feed" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/status": {
+      "get": {
+        "summary": "Get Sync Status",
+        "description": "Returns the current sync status of the BitPic indexer.",
+        "operationId": "getStatus",
+        "tags": ["Status"],
+        "responses": {
+          "200": {
+            "description": "Sync status",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Status" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/broadcast": {
+      "post": {
+        "summary": "Broadcast Transaction",
+        "description": "Broadcast a BitPic transaction to the network and immediately index it.",
+        "operationId": "broadcastTransaction",
+        "tags": ["Broadcast"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["rawTx"],
+                "properties": {
+                  "rawTx": {
+                    "type": "string",
+                    "description": "Raw transaction hex"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transaction broadcast result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "txid": { "type": "string" },
+                    "success": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/paymail/{handle}": {
+      "get": {
+        "summary": "Get Paymail Record",
+        "description": "Returns the paymail record for a registered @bitpic.net handle.",
+        "operationId": "getPaymail",
+        "tags": ["Paymail"],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The handle (without @bitpic.net)",
+            "example": "alice"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paymail record",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymailRecord" }
+              }
+            }
+          },
+          "404": {
+            "description": "Handle not found"
+          }
+        }
+      }
+    },
+    "/api/paymail/{handle}/available": {
+      "get": {
+        "summary": "Check Handle Availability",
+        "description": "Check if a @bitpic.net handle is available for registration.",
+        "operationId": "checkHandleAvailable",
+        "tags": ["Paymail"],
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The handle to check",
+            "example": "alice"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "available": { "type": "boolean" },
+                    "handle": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/paymail/register": {
+      "post": {
+        "summary": "Register Paymail Handle",
+        "description": "Register a new @bitpic.net paymail handle. Requires payment proof.",
+        "operationId": "registerPaymail",
+        "tags": ["Paymail"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PaymailRegistration" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registration successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "paymail": { "type": "string", "example": "alice@bitpic.net" }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Handle already taken"
+          }
+        }
+      }
+    },
+    "/.well-known/bsvalias": {
+      "get": {
+        "summary": "Paymail Capabilities",
+        "description": "BRC-29 paymail capabilities document.",
+        "operationId": "getPaymailCapabilities",
+        "tags": ["Paymail"],
+        "responses": {
+          "200": {
+            "description": "Capabilities document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bsvalias": { "type": "string", "example": "1.0" },
+                    "capabilities": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Simple health check endpoint.",
+        "operationId": "healthCheck",
+        "tags": ["Status"],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      },
+      "AvatarMetadata": {
+        "type": "object",
+        "properties": {
+          "paymail": { "type": "string", "example": "alice@example.com" },
+          "outpoint": { "type": "string", "example": "abc123...def_0" },
+          "timestamp": { "type": "integer", "example": 1702857600 },
+          "txid": { "type": "string" },
+          "confirmed": { "type": "boolean" },
+          "url": { "type": "string", "format": "uri" }
+        }
+      },
+      "Feed": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FeedItem" }
+          },
+          "total": { "type": "integer" },
+          "offset": { "type": "integer" },
+          "limit": { "type": "integer" }
+        }
+      },
+      "FeedItem": {
+        "type": "object",
+        "properties": {
+          "paymail": { "type": "string" },
+          "outpoint": { "type": "string" },
+          "timestamp": { "type": "integer" },
+          "url": { "type": "string", "format": "uri" },
+          "txid": { "type": "string" },
+          "confirmed": { "type": "boolean" }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "lastBlock": { "type": "integer" },
+          "lastBlockTime": { "type": "string", "format": "date-time" },
+          "totalAvatars": { "type": "integer" },
+          "connected": { "type": "boolean" },
+          "syncing": { "type": "boolean" }
+        }
+      },
+      "PaymailRecord": {
+        "type": "object",
+        "properties": {
+          "handle": { "type": "string" },
+          "paymentAddress": { "type": "string" },
+          "paymentPubkey": { "type": "string" },
+          "ordAddress": { "type": "string" },
+          "identityPubkey": { "type": "string" },
+          "createdAt": { "type": "integer" }
+        }
+      },
+      "PaymailRegistration": {
+        "type": "object",
+        "required": ["handle", "paymentAddress", "paymentPubkey"],
+        "properties": {
+          "handle": { "type": "string", "example": "alice" },
+          "paymentAddress": { "type": "string" },
+          "paymentPubkey": { "type": "string" },
+          "ordAddress": { "type": "string" },
+          "identityPubkey": { "type": "string" },
+          "paymentTxid": { "type": "string" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Avatar", "description": "Avatar image and metadata endpoints" },
+    { "name": "Feed", "description": "Recent avatar feed" },
+    { "name": "Status", "description": "Service status and health" },
+    { "name": "Broadcast", "description": "Transaction broadcasting" },
+    { "name": "Paymail", "description": "Paymail registration and resolution (BRC-29)" }
+  ]
+}
