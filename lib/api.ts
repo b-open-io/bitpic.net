@@ -62,6 +62,13 @@ export interface RegisterPaymailResponse {
   error?: string;
 }
 
+export interface PaymailLookupResponse {
+  found: boolean;
+  handle?: string;
+  paymail?: string;
+  error?: string;
+}
+
 export class BitPicAPI {
   private baseUrl: string;
 
@@ -203,6 +210,29 @@ export class BitPicAPI {
       console.error("Error registering paymail:", error);
       return {
         success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async lookupPaymailByPubkey(pubkey: string): Promise<PaymailLookupResponse> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/api/paymail/lookup/${encodeURIComponent(pubkey)}`,
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return { found: false };
+        }
+        throw new Error(`Failed to lookup paymail: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error looking up paymail:", error);
+      return {
+        found: false,
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }

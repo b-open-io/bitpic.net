@@ -111,3 +111,32 @@ func (h *PaymailHandler) CheckAvailable(c *fiber.Ctx) error {
 		"handle":    handle,
 	})
 }
+
+// GetByPubkey looks up a paymail by identity pubkey
+func (h *PaymailHandler) GetByPubkey(c *fiber.Ctx) error {
+	pubkey := c.Params("pubkey")
+	if pubkey == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Pubkey is required",
+		})
+	}
+
+	paymail, err := h.redis.GetPaymailByPubkey(pubkey)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to lookup paymail",
+		})
+	}
+
+	if paymail == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error":  "No paymail found for this pubkey",
+			"pubkey": pubkey,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"handle":  paymail.Handle,
+		"paymail": paymail.Handle + "@bitpic.net",
+	})
+}

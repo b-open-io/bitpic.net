@@ -105,6 +105,7 @@ func main() {
 	app.Post("/api/broadcast", broadcastHandler.Handle)
 
 	// Paymail routes
+	app.Get("/api/paymail/lookup/:pubkey", paymailHandler.GetByPubkey)
 	app.Get("/api/paymail/:handle", paymailHandler.Get)
 	app.Get("/api/paymail/:handle/available", paymailHandler.CheckAvailable)
 	app.Post("/api/paymail/register", paymailHandler.Register)

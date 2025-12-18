@@ -33,19 +33,38 @@ export function useWallet(): WalletState {
   useEffect(() => {
     if (!wallet) return;
 
-    // Set up event listeners using type assertion since the types may not include these
+    const walletWithEvents = wallet as {
+      on?: (event: string, handler: () => void) => void;
+      removeListener?: (event: string, handler: () => void) => void;
+    };
+
+    // Set up event listeners for wallet state changes
+    const handleSignedOut = () => {
+      console.log("Wallet signed out");
+      resetState();
+    };
+
+    const handleSwitchAccount = () => {
+      console.log("Wallet account switched");
+      resetState();
+    };
+
     try {
-      (wallet as { on?: (event: string, handler: () => void) => void }).on?.(
-        "switchAccount",
-        resetState,
-      );
-      (wallet as { on?: (event: string, handler: () => void) => void }).on?.(
-        "signedOut",
-        resetState,
-      );
+      walletWithEvents.on?.("signedOut", handleSignedOut);
+      walletWithEvents.on?.("switchAccount", handleSwitchAccount);
     } catch {
       // Events may not be supported
     }
+
+    // Cleanup listeners on unmount
+    return () => {
+      try {
+        walletWithEvents.removeListener?.("signedOut", handleSignedOut);
+        walletWithEvents.removeListener?.("switchAccount", handleSwitchAccount);
+      } catch {
+        // Cleanup may not be supported
+      }
+    };
   }, [wallet, resetState]);
 
   const connect = useCallback(async (): Promise<string | undefined> => {

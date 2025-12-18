@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { ImageCropper } from "@/components/image-cropper";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,16 +11,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { api } from "@/lib/api";
 import type { BitPicTransactionData } from "@/lib/transaction-builder";
 import {
   buildBitPicOpReturn,
-  isValidPaymail,
   validateImage,
 } from "@/lib/transaction-builder";
 import { useWallet } from "@/lib/use-wallet";
 
-type Step = "upload" | "crop" | "details" | "sign" | "success";
+type Step = "upload" | "crop" | "connect" | "sign" | "success";
 
 interface UploadDialogProps {
   onClose?: () => void;
@@ -31,10 +31,38 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   const [step, setStep] = useState<Step>("upload");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
-  const [paymail, setPaymail] = useState("");
+  const [paymail, setPaymail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [txid, setTxid] = useState<string | null>(null);
+
+  // Look up paymail when wallet connects
+  useEffect(() => {
+    if (isConnected && pubKey && step === "connect") {
+      lookupPaymail();
+    }
+  }, [isConnected, pubKey, step]);
+
+  const lookupPaymail = async () => {
+    if (!pubKey) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await api.lookupPaymailByPubkey(pubKey);
+      if (result.found && result.paymail) {
+        setPaymail(result.paymail);
+      } else {
+        setPaymail(null);
+      }
+    } catch (err) {
+      console.error("Failed to lookup paymail:", err);
+      setPaymail(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,7 +126,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
   const handleCropComplete = useCallback((cropped: string) => {
     setCroppedImage(cropped);
-    setStep("details");
+    setStep("connect");
   }, []);
 
   const handleConnect = async () => {
@@ -106,22 +134,17 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     setError(null);
     try {
       await connect();
+      // lookupPaymail will be called by useEffect when isConnected changes
     } catch (err) {
       setError("Failed to connect wallet");
       console.error(err);
-    } finally {
       setIsLoading(false);
     }
   };
 
   const handleSignAndBroadcast = async () => {
-    if (!wallet || !pubKey || !croppedImage) {
+    if (!wallet || !pubKey || !croppedImage || !paymail) {
       setError("Missing required data");
-      return;
-    }
-
-    if (!isValidPaymail(paymail)) {
-      setError("Invalid paymail format");
       return;
     }
 
@@ -176,7 +199,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         err instanceof Error ? err.message : "Failed to sign and broadcast",
       );
       console.error("Error signing and broadcasting:", err);
-      setStep("details");
+      setStep("connect");
     } finally {
       setIsLoading(false);
     }
@@ -188,14 +211,14 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         <CardTitle>
           {step === "upload" && "Upload Avatar"}
           {step === "crop" && "Crop Avatar"}
-          {step === "details" && "Enter Details"}
+          {step === "connect" && "Connect & Upload"}
           {step === "sign" && "Sign & Broadcast"}
           {step === "success" && "Success!"}
         </CardTitle>
         <CardDescription>
           {step === "upload" && "Choose an image for your BitPic avatar"}
           {step === "crop" && "Adjust your avatar crop and zoom"}
-          {step === "details" && "Connect wallet and enter your paymail"}
+          {step === "connect" && "Connect your wallet to upload"}
           {step === "sign" && "Signing and broadcasting to Bitcoin..."}
           {step === "success" && "Your avatar has been uploaded to Bitcoin"}
         </CardDescription>
@@ -203,7 +226,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
       <CardContent>
         {error && (
-          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md">
+          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm">
             {error}
           </div>
         )}
@@ -264,11 +287,11 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           />
         )}
 
-        {step === "details" && (
+        {step === "connect" && (
           <div className="space-y-4">
             {croppedImage && (
               <div className="flex justify-center mb-4">
-                {/* biome-ignore lint/performance/noImgElement: blob URL from canvas crop cannot use Next Image */}
+                {/* biome-ignore lint/a11y/useAltText: Preview image */}
                 <img
                   src={croppedImage}
                   alt="Cropped avatar preview"
@@ -279,7 +302,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
             {!isConnected ? (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground text-center">
                   Connect your Yours Wallet to continue
                 </p>
                 <Button
@@ -290,26 +313,20 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                   {isLoading ? "Connecting..." : "Connect Wallet"}
                 </Button>
               </div>
-            ) : (
+            ) : isLoading ? (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  Looking up your paymail...
+                </p>
+              </div>
+            ) : paymail ? (
               <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="paymail"
-                    className="block text-sm font-medium mb-2"
-                  >
-                    Paymail
-                  </label>
-                  <Input
-                    id="paymail"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={paymail}
-                    onChange={(e) => setPaymail(e.target.value)}
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Your BitPic will be associated with this paymail
+                <div className="rounded-sm border border-border/40 bg-muted/50 p-4">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Uploading as
                   </p>
+                  <p className="font-mono text-sm">{paymail}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -325,10 +342,36 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                   </Button>
                   <Button
                     onClick={handleSignAndBroadcast}
-                    disabled={isLoading || !paymail}
+                    disabled={isLoading}
                     className="flex-1"
                   >
-                    {isLoading ? "Processing..." : "Upload to Bitcoin"}
+                    Upload to Bitcoin
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 text-center">
+                <div className="rounded-sm border border-amber-500/40 bg-amber-500/10 p-4">
+                  <p className="text-sm text-foreground mb-2">
+                    You need a @bitpic.net paymail to upload avatars
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Register a free paymail to link your avatar to your identity
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setStep("crop");
+                      setCroppedImage(null);
+                    }}
+                    className="flex-1"
+                  >
+                    Back
+                  </Button>
+                  <Button asChild className="flex-1">
+                    <Link href="/paymail">Register Paymail</Link>
                   </Button>
                 </div>
               </div>
@@ -352,7 +395,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           <div className="text-center space-y-4 py-4">
             {croppedImage && (
               <div className="flex justify-center mb-4">
-                {/* biome-ignore lint/performance/noImgElement: blob URL from canvas crop cannot use Next Image */}
+                {/* biome-ignore lint/a11y/useAltText: Success preview */}
                 <img
                   src={croppedImage}
                   alt="Uploaded avatar"
@@ -364,7 +407,14 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
               <p className="text-primary font-medium">
                 Avatar uploaded successfully!
               </p>
-              <p className="text-sm text-muted-foreground">Transaction ID:</p>
+              {paymail && (
+                <p className="text-sm text-muted-foreground">
+                  Linked to <span className="font-mono">{paymail}</span>
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground mt-4">
+                Transaction ID:
+              </p>
               <code className="block text-xs bg-muted p-2 rounded break-all font-mono">
                 {txid}
               </code>

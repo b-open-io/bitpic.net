@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -284,6 +285,28 @@ func (r *RedisClient) GetPaymail(handle string) (*PaymailData, error) {
 	}
 
 	return &data, nil
+}
+
+// GetPaymailByPubkey looks up a paymail by identity pubkey
+func (r *RedisClient) GetPaymailByPubkey(pubkey string) (*PaymailData, error) {
+	// Get all handles from the index
+	handles, err := r.client.SMembers(r.ctx, "paymail:index").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get paymail index: %w", err)
+	}
+
+	// Check each handle for matching pubkey
+	for _, handle := range handles {
+		data, err := r.GetPaymail(handle)
+		if err != nil {
+			continue
+		}
+		if data != nil && strings.EqualFold(data.IdentityPubkey, pubkey) {
+			return data, nil
+		}
+	}
+
+	return nil, nil
 }
 
 // Close closes the Redis connection
