@@ -4,7 +4,7 @@ import { fetchThemeByOrigin } from "@theme-token/sdk";
 import { useThemeToken } from "@theme-token/sdk/react";
 import { Check, Moon, Palette, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -25,14 +25,14 @@ interface ThemeMetadata {
 export function ThemeSelector() {
   const { ordinals, isConnected } = useWallet();
   const { resolvedTheme, setTheme } = useTheme();
-  const {
-    themeTokens,
-    activeOrigin,
-    activeTheme,
-    loadTheme,
-    resetTheme,
-    isLoading,
-  } = useThemeToken(ordinals);
+  const { activeOrigin, activeTheme, loadTheme, resetTheme, isLoading } =
+    useThemeToken(ordinals);
+
+  // Filter ordinals for type === "theme" (not app === "ThemeToken")
+  const themeTokens = useMemo(
+    () => ordinals.filter((o) => o.map?.type === "theme"),
+    [ordinals],
+  );
 
   const [themesMetadata, setThemesMetadata] = useState<ThemeMetadata[]>([]);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
