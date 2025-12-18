@@ -99,6 +99,7 @@ func (s *Subscriber) GetStatus() (connected bool, syncing bool, lastBlock uint64
 
 // onTransaction handles confirmed transactions
 func (s *Subscriber) onTransaction(tx *models.TransactionResponse) {
+	log.Printf("TX received: %s @ block %d", tx.Id, tx.BlockHeight)
 	s.processTransaction(tx, true)
 }
 
