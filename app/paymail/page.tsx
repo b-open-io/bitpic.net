@@ -24,7 +24,7 @@ export default function PaymailPage() {
             Get Your @bitpic.net Paymail
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Claim your unique identity on the Bitcoin network
+            The universal avatar standard for Bitcoin. Like Gravatar, but on-chain.
           </p>
           <div className="pt-4">
             <Button
@@ -96,13 +96,13 @@ export default function PaymailPage() {
                 <div className="p-2 rounded-sm bg-primary/10">
                   <Shield className="h-5 w-5 text-primary" />
                 </div>
-                <CardTitle className="text-base">On-Chain Identity</CardTitle>
+                <CardTitle className="text-base">Universal Avatar</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Your paymail is secured on the Bitcoin SV blockchain. Immutable,
-                censorship-resistant, and fully under your control.
+                Works like Gravatar. Your BitPic avatar automatically appears in
+                any wallet, app, or service that resolves paymails.
               </CardDescription>
             </CardContent>
           </Card>
