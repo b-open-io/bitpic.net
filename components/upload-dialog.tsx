@@ -27,7 +27,7 @@ interface UploadDialogProps {
 }
 
 export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
-  const { wallet, isConnected, connect, pubKey } = useWallet();
+  const { wallet, isConnected, connect, pubKey, socialProfile } = useWallet();
   const [step, setStep] = useState<Step>("upload");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
@@ -35,6 +35,40 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [txid, setTxid] = useState<string | null>(null);
+  const [loadingProfileImage, setLoadingProfileImage] = useState(false);
+
+  // Load profile image from wallet social profile on mount
+  useEffect(() => {
+    if (socialProfile?.avatar && step === "upload" && !selectedImage) {
+      loadProfileImage(socialProfile.avatar);
+    }
+  }, [socialProfile?.avatar, step, selectedImage]);
+
+  const loadProfileImage = async (avatarUrl: string) => {
+    setLoadingProfileImage(true);
+    try {
+      const response = await fetch(avatarUrl);
+      if (!response.ok) throw new Error("Failed to fetch profile image");
+
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        const validation = validateImage(result);
+
+        if (validation.valid) {
+          setSelectedImage(result);
+          setStep("crop");
+        }
+        setLoadingProfileImage(false);
+      };
+      reader.onerror = () => setLoadingProfileImage(false);
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      console.error("Failed to load profile image:", err);
+      setLoadingProfileImage(false);
+    }
+  };
 
   // Look up paymail when wallet connects
   useEffect(() => {
@@ -232,48 +266,84 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         )}
 
         {step === "upload" && (
-          <section
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-muted-foreground transition-colors cursor-pointer"
-            aria-label="File drop zone"
-          >
-            <input
-              type="file"
-              id="file-upload"
-              accept="image/png,image/jpeg"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <label htmlFor="file-upload" className="cursor-pointer">
-              <div className="space-y-2">
-                <svg
-                  className="mx-auto h-12 w-12 text-muted-foreground"
-                  stroke="currentColor"
-                  fill="none"
-                  viewBox="0 0 48 48"
-                  aria-hidden="true"
-                >
-                  <title>Upload Icon</title>
-                  <path
-                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <div className="text-muted-foreground">
-                  <span className="font-medium text-primary hover:text-primary/80">
-                    Click to upload
-                  </span>{" "}
-                  or drag and drop
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  PNG or JPEG up to 1MB
+          <div className="space-y-4">
+            {loadingProfileImage ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  Loading your profile image...
                 </p>
               </div>
-            </label>
-          </section>
+            ) : (
+              <>
+                {socialProfile?.avatar && (
+                  <div className="flex flex-col items-center gap-3 p-4 bg-muted/30 rounded-lg">
+                    <img
+                      src={socialProfile.avatar}
+                      alt="Current profile"
+                      className="w-20 h-20 rounded-full object-cover"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      {socialProfile.displayName
+                        ? `Use ${socialProfile.displayName}'s profile image`
+                        : "Use your current profile image"}
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => loadProfileImage(socialProfile.avatar!)}
+                    >
+                      Use This Image
+                    </Button>
+                  </div>
+                )}
+                <section
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-muted-foreground transition-colors cursor-pointer"
+                  aria-label="File drop zone"
+                >
+                  <input
+                    type="file"
+                    id="file-upload"
+                    accept="image/png,image/jpeg"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <div className="space-y-2">
+                      <svg
+                        className="mx-auto h-12 w-12 text-muted-foreground"
+                        stroke="currentColor"
+                        fill="none"
+                        viewBox="0 0 48 48"
+                        aria-hidden="true"
+                      >
+                        <title>Upload Icon</title>
+                        <path
+                          d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <div className="text-muted-foreground">
+                        <span className="font-medium text-primary hover:text-primary/80">
+                          {socialProfile?.avatar
+                            ? "Or click to upload a different image"
+                            : "Click to upload"}
+                        </span>{" "}
+                        {!socialProfile?.avatar && "or drag and drop"}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        PNG or JPEG up to 1MB
+                      </p>
+                    </div>
+                  </label>
+                </section>
+              </>
+            )}
+          </div>
         )}
 
         {step === "crop" && selectedImage && (

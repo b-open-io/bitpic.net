@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useYoursWallet } from "yours-wallet-provider";
 
+export interface SocialProfile {
+  displayName?: string;
+  avatar?: string;
+}
+
 export interface WalletState {
   wallet: ReturnType<typeof useYoursWallet> | null;
   isConnected: boolean;
@@ -10,6 +15,7 @@ export interface WalletState {
   pubKey: string | null;
   ordAddress: string | null;
   identityAddress: string | null;
+  socialProfile: SocialProfile | null;
   connect: () => Promise<string | undefined>;
   disconnect: () => void;
 }
@@ -21,6 +27,9 @@ export function useWallet(): WalletState {
   const [pubKey, setPubKey] = useState<string | null>(null);
   const [ordAddress, setOrdAddress] = useState<string | null>(null);
   const [identityAddress, setIdentityAddress] = useState<string | null>(null);
+  const [socialProfile, setSocialProfile] = useState<SocialProfile | null>(
+    null,
+  );
 
   const resetState = useCallback(() => {
     setIsConnected(false);
@@ -28,6 +37,7 @@ export function useWallet(): WalletState {
     setPubKey(null);
     setOrdAddress(null);
     setIdentityAddress(null);
+    setSocialProfile(null);
   }, []);
 
   useEffect(() => {
@@ -85,6 +95,20 @@ export function useWallet(): WalletState {
         setOrdAddress(addresses.ordAddress);
         setIdentityAddress(addresses.identityAddress);
       }
+
+      // Fetch social profile from wallet
+      try {
+        const profile = await wallet.getSocialProfile();
+        if (profile) {
+          setSocialProfile({
+            displayName: profile.displayName,
+            avatar: profile.avatar,
+          });
+        }
+      } catch {
+        // Social profile may not be available
+      }
+
       setIsConnected(true);
 
       return publicKey;
@@ -105,6 +129,7 @@ export function useWallet(): WalletState {
     pubKey,
     ordAddress,
     identityAddress,
+    socialProfile,
     connect,
     disconnect,
   };
