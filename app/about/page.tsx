@@ -52,6 +52,52 @@ export default function AboutPage() {
         <hr className="my-8 border-border" />
 
         <h2 className="text-2xl font-bold tracking-tight">
+          Free @bitpic.net Paymail
+        </h2>
+
+        <p>
+          BitPic.net provides free paymail addresses that include built-in
+          avatar support. When you register a{" "}
+          <code className="bg-muted px-1 py-0.5 font-mono text-sm">
+            yourname@bitpic.net
+          </code>{" "}
+          paymail, you get:
+        </p>
+
+        <ul className="space-y-2">
+          <li>
+            <strong>BSV Payment Address:</strong> Receive Bitcoin payments to
+            your memorable paymail address, forwarded to your Yours Wallet.
+          </li>
+          <li>
+            <strong>Ordinals Receive:</strong> Accept 1Sat Ordinals NFTs
+            directly to your paymail address.
+          </li>
+          <li>
+            <strong>Avatar Capability:</strong> Your BitPic avatar is
+            automatically served via the standard paymail public-profile
+            capability (BRFC f12f968c92d6).
+          </li>
+          <li>
+            <strong>Identity Verification:</strong> Your paymail is linked to
+            your wallet&apos;s identity key, ensuring only you can update your
+            avatar.
+          </li>
+        </ul>
+
+        <p>
+          <Link
+            href="/paymail"
+            className="text-primary underline underline-offset-4"
+          >
+            Register your free @bitpic.net paymail
+          </Link>{" "}
+          to get started.
+        </p>
+
+        <hr className="my-8 border-border" />
+
+        <h2 className="text-2xl font-bold tracking-tight">
           Step 1. Upload avatar to Bitcoin
         </h2>
 
