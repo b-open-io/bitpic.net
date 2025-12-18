@@ -44,18 +44,19 @@ func (s *Subscriber) Start() error {
 	}
 	s.client = client
 
-	// Get last block from Redis, or use default starting block
-	const defaultFromBlock uint64 = 600000 // BitPic genesis block
+	// Get last block from Redis, never go below minimum
+	const minFromBlock uint64 = 600000 // BitPic genesis block - never sync before this
 
 	lastBlock, err := s.redis.GetLastBlock()
 	if err != nil {
 		log.Printf("Warning: failed to get last block from Redis: %v", err)
-		lastBlock = defaultFromBlock
+		lastBlock = minFromBlock
 	}
 
-	if lastBlock == 0 {
-		lastBlock = defaultFromBlock
-		log.Printf("Starting from genesis block %d", lastBlock)
+	// Always use at least minFromBlock - never sync earlier blocks
+	if lastBlock < minFromBlock {
+		log.Printf("Stored block %d is before genesis, starting from %d", lastBlock, minFromBlock)
+		lastBlock = minFromBlock
 	} else {
 		log.Printf("Resuming from block %d", lastBlock)
 	}
