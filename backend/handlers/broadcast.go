@@ -110,12 +110,16 @@ func (h *BroadcastHandler) parseAndStore(rawTxHex, txid string) {
 	data.Timestamp = timestamp
 
 	// Store in Redis as unconfirmed
-	if err := h.redis.SetAvatar(data.Paymail, data.Outpoint, txid, timestamp, false); err != nil {
+	if err := h.redis.SetAvatar(data.Paymail, data.Outpoint, txid, timestamp, false, data.IsRef, data.RefOrigin); err != nil {
 		log.Printf("Failed to store avatar for %s: %v", data.Paymail, err)
 		return
 	}
 
-	log.Printf("Immediately stored BitPic avatar (unconfirmed): %s -> %s", data.Paymail, data.Outpoint)
+	refInfo := ""
+	if data.IsRef {
+		refInfo = fmt.Sprintf(" (ref -> %s)", data.RefOrigin)
+	}
+	log.Printf("Immediately stored BitPic avatar (unconfirmed): %s -> %s%s", data.Paymail, data.Outpoint, refInfo)
 }
 
 // broadcastToARC broadcasts a transaction to ARC

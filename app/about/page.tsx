@@ -355,6 +355,68 @@ OP_RETURN
           </div>
         </div>
 
+        <h3 className="text-xl font-semibold mt-6">Outpoint References</h3>
+
+        <p>
+          Instead of uploading a new image, you can link your avatar to any
+          existing on-chain image - whether it&apos;s a{" "}
+          <a
+            href="https://docs.1satordinals.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-4"
+          >
+            1Sat Ordinal
+          </a>{" "}
+          inscription or a{" "}
+          <a
+            href="https://b.bitdb.network/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-4"
+          >
+            B protocol
+          </a>{" "}
+          file. This is useful if you already have an image on-chain you want to
+          use as your avatar, or want to share the same image across multiple
+          paymails without re-uploading.
+        </p>
+
+        <p>
+          Outpoint references use the special mime type{" "}
+          <code className="bg-muted px-1 py-0.5 font-mono text-sm">
+            application/x-bitpic-ref
+          </code>{" "}
+          and contain a pointer to the outpoint containing the image:
+        </p>
+
+        <pre className="bg-muted p-4 overflow-x-auto font-mono text-sm">
+          {`OP_0
+OP_RETURN
+19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut
+  [txid_vout]
+  application/x-bitpic-ref
+  utf-8
+|
+18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p
+  [Paymail]
+  [Pubkey]
+  [Sig of txid_vout]`}
+        </pre>
+
+        <p>
+          When serving the avatar, BitPic resolves the reference via{" "}
+          <a
+            href="https://ordfs.network"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-4"
+          >
+            ORDFS
+          </a>{" "}
+          to fetch the actual image data from the referenced outpoint.
+        </p>
+
         <p className="mt-4">
           View BitPic transactions on{" "}
           <a

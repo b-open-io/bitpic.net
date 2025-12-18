@@ -37,8 +37,7 @@ export async function GET(
     }
 
     // Compare the provided pubkey with the registered identity pubkey
-    const match =
-      data.identityPubkey.toLowerCase() === pubkey.toLowerCase();
+    const match = data.identityPubkey.toLowerCase() === pubkey.toLowerCase();
 
     // Return full paymail address per BRC-29
     const fullPaymail = `${handle}@bitpic.net`;

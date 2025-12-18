@@ -5,11 +5,14 @@
  * - BitPic protocol prefix (18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p)
  * - Paymail, public key, and signature
  * - B protocol for binary data
- * - Image data with mime type
+ * - Image data with mime type, OR ordinal reference
  */
 
 const BITPIC_PREFIX = "18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p";
 const B_PROTOCOL_PREFIX = "19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut";
+
+// Mime type for ordinal references (points to existing on-chain image)
+export const BITPIC_REF_MIME = "application/x-bitpic-ref";
 
 export interface SignedMessage {
   address: string;
@@ -24,6 +27,13 @@ export interface BitPicTransactionData {
   signature: string;
   imageData: string; // base64
   mimeType: "image/png" | "image/jpeg";
+}
+
+export interface BitPicRefTransactionData {
+  paymail: string;
+  publicKey: string;
+  signature: string;
+  ordinalRef: string; // Format: txid_vout (e.g., "abc123...def_0")
 }
 
 /**
@@ -52,6 +62,60 @@ export function buildBitPicOpReturn(data: BitPicTransactionData): string[] {
     publicKey,
     signature,
   ];
+}
+
+/**
+ * Build BitPic transaction OP_RETURN data for ordinal reference
+ * Instead of embedding image data, references an existing ordinal inscription
+ *
+ * Format: B protocol (ordinal ref) | BitPic protocol (metadata)
+ */
+export function buildBitPicRefOpReturn(
+  data: BitPicRefTransactionData,
+): string[] {
+  const { paymail, publicKey, signature, ordinalRef } = data;
+
+  // Validate ordinal reference format (txid_vout)
+  if (!isValidOrdinalRef(ordinalRef)) {
+    throw new Error("Invalid ordinal reference format. Expected: txid_vout");
+  }
+
+  return [
+    // B protocol tape (ordinal reference)
+    B_PROTOCOL_PREFIX,
+    ordinalRef, // Plain text: "abc123...def_0"
+    BITPIC_REF_MIME, // application/x-bitpic-ref
+    "utf-8",
+    "|", // Pipe separator
+    // BitPic protocol tape (metadata)
+    BITPIC_PREFIX,
+    paymail,
+    publicKey,
+    signature,
+  ];
+}
+
+/**
+ * Validate ordinal reference format (txid_vout)
+ */
+export function isValidOrdinalRef(ref: string): boolean {
+  const parts = ref.split("_");
+  if (parts.length !== 2) return false;
+
+  const [txid, vout] = parts;
+  // txid should be 64 hex chars
+  if (!/^[a-fA-F0-9]{64}$/.test(txid)) return false;
+  // vout should be a non-negative integer
+  if (!/^\d+$/.test(vout)) return false;
+
+  return true;
+}
+
+/**
+ * Get ORDFS URL for an ordinal reference
+ */
+export function getOrdfsUrl(ordinalRef: string): string {
+  return `https://ordfs.network/content/${ordinalRef}`;
 }
 
 /**

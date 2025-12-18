@@ -1,7 +1,7 @@
 "use client";
 
-import { Palette } from "lucide-react";
 import { useThemeToken } from "@theme-token/sdk/react";
+import { Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

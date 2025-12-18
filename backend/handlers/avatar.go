@@ -68,18 +68,25 @@ func (h *AvatarHandler) Handle(c *fiber.Ctx) error {
 	// Get default image URL parameter
 	defaultURL := c.Query("d", "")
 
-	// Get outpoint from Redis
-	outpoint, err := h.redis.GetAvatar(paymail)
+	// Get avatar data from Redis
+	avatarData, err := h.redis.GetAvatarData(paymail)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Failed to fetch avatar")
 	}
 
 	// Handle missing avatar - redirect to default or return 404
-	if outpoint == "" {
+	if avatarData == nil {
 		if defaultURL != "" {
 			return c.Redirect(defaultURL, fiber.StatusTemporaryRedirect)
 		}
 		return c.Status(fiber.StatusNotFound).SendString("Avatar not found")
+	}
+
+	// Determine the actual outpoint to fetch
+	// If this is a reference, use the RefOrigin; otherwise use the Outpoint
+	outpoint := avatarData.Outpoint
+	if avatarData.IsRef && avatarData.RefOrigin != "" {
+		outpoint = avatarData.RefOrigin
 	}
 
 	// Build cache key with size

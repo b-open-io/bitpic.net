@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
@@ -15,6 +16,8 @@ const (
 	BitPicPrefix = "18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p"
 	// BProtocolPrefix is the address for B protocol (file upload)
 	BProtocolPrefix = "19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut"
+	// BitPicRefMime is the mime type for ordinal references
+	BitPicRefMime = "application/x-bitpic-ref"
 )
 
 // Script opcodes
@@ -29,13 +32,15 @@ const (
 
 // BitPicData represents parsed BitPic protocol data from a transaction
 type BitPicData struct {
-	Paymail   string
-	PubKey    string
-	Signature string
-	ImageHash string // SHA256 hash of image data (hex)
-	Outpoint  string // Format: txid_vout
-	TxID      string
-	Timestamp int64
+	Paymail    string
+	PubKey     string
+	Signature  string
+	ImageHash  string // SHA256 hash of image data (hex) - empty for refs
+	Outpoint   string // Format: txid_vout (where image is stored)
+	TxID       string
+	Timestamp  int64
+	IsRef      bool   // True if this is an ordinal reference
+	RefOrigin  string // For refs: the ordinal origin being referenced
 }
 
 // ParseTransaction parses a raw transaction and extracts BitPic protocol data
@@ -54,6 +59,7 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 	bitpicFound := false
 	bProtocolFound := false
 	var imageData []byte
+	var mimeType string
 
 	for i, output := range tx.Outputs {
 		ls := output.LockingScript
@@ -75,10 +81,16 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 				continue
 			}
 
-			// Check for B protocol (image data) - need to get this first for hash
+			// Check for B protocol (image data or reference)
 			if tape[0] == BProtocolPrefix && !bProtocolFound && len(rawTapes[ti]) >= 2 {
 				data.Outpoint = fmt.Sprintf("%s_%d", txid, i)
-				imageData = rawTapes[ti][1] // Raw image bytes
+				imageData = rawTapes[ti][1] // Raw data (image bytes or ref string)
+
+				// Check mime type if present
+				if len(tape) >= 3 {
+					mimeType = tape[2]
+				}
+
 				bProtocolFound = true
 			}
 
@@ -100,19 +112,58 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 		return nil, errors.New("B protocol (image) data not found in transaction")
 	}
 
-	// Hash the image data
 	if len(imageData) == 0 {
-		return nil, errors.New("no image data found in B protocol")
+		return nil, errors.New("no data found in B protocol")
 	}
-	hash := sha256.Sum256(imageData)
-	data.ImageHash = hex.EncodeToString(hash[:])
 
-	// Verify the signature against the image hash
-	if err := VerifySignature(data.ImageHash, data.PubKey, data.Signature); err != nil {
-		return nil, fmt.Errorf("signature verification failed: %w", err)
+	// Check if this is an ordinal reference
+	if mimeType == BitPicRefMime {
+		// This is a reference to an existing ordinal
+		refOrigin := string(imageData) // The reference is stored as plain text
+		if !isValidOrdinalRef(refOrigin) {
+			return nil, fmt.Errorf("invalid ordinal reference format: %s", refOrigin)
+		}
+		data.IsRef = true
+		data.RefOrigin = refOrigin
+		// For refs, we sign the reference string itself
+		if err := VerifySignature(refOrigin, data.PubKey, data.Signature); err != nil {
+			return nil, fmt.Errorf("signature verification failed: %w", err)
+		}
+	} else {
+		// Regular image upload - hash the image data
+		hash := sha256.Sum256(imageData)
+		data.ImageHash = hex.EncodeToString(hash[:])
+		// Verify the signature against the image hash
+		if err := VerifySignature(data.ImageHash, data.PubKey, data.Signature); err != nil {
+			return nil, fmt.Errorf("signature verification failed: %w", err)
+		}
 	}
 
 	return data, nil
+}
+
+// isValidOrdinalRef validates the ordinal reference format (txid_vout)
+func isValidOrdinalRef(ref string) bool {
+	parts := strings.Split(ref, "_")
+	if len(parts) != 2 {
+		return false
+	}
+	// txid should be 64 hex chars
+	if len(parts[0]) != 64 {
+		return false
+	}
+	for _, c := range parts[0] {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	// vout should be a non-negative integer
+	for _, c := range parts[1] {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return len(parts[1]) > 0
 }
 
 // extractTapesWithRaw parses an OP_RETURN script into tapes with both string and raw representations

@@ -190,7 +190,7 @@ func (s *Subscriber) processTransaction(tx *models.TransactionResponse, confirme
 	data.Timestamp = timestamp
 
 	// Store in Redis
-	if err := s.redis.SetAvatar(data.Paymail, data.Outpoint, tx.Id, timestamp, confirmed); err != nil {
+	if err := s.redis.SetAvatar(data.Paymail, data.Outpoint, tx.Id, timestamp, confirmed, data.IsRef, data.RefOrigin); err != nil {
 		log.Printf("Failed to store avatar for %s: %v", data.Paymail, err)
 		return
 	}

@@ -23,6 +23,8 @@ type AvatarData struct {
 	Paymail   string `json:"paymail"`
 	TxID      string `json:"txid"`
 	Confirmed bool   `json:"confirmed"`
+	IsRef     bool   `json:"isRef,omitempty"`     // True if this points to an ordinal
+	RefOrigin string `json:"refOrigin,omitempty"` // The ordinal origin being referenced
 }
 
 // FeedItem represents an item in the feed
@@ -57,13 +59,15 @@ func NewRedisClient(redisURL string) (*RedisClient, error) {
 }
 
 // SetAvatar stores avatar data for a paymail
-func (r *RedisClient) SetAvatar(paymail, outpoint, txid string, timestamp int64, confirmed bool) error {
+func (r *RedisClient) SetAvatar(paymail, outpoint, txid string, timestamp int64, confirmed bool, isRef bool, refOrigin string) error {
 	data := AvatarData{
 		Outpoint:  outpoint,
 		Timestamp: timestamp,
 		Paymail:   paymail,
 		TxID:      txid,
 		Confirmed: confirmed,
+		IsRef:     isRef,
+		RefOrigin: refOrigin,
 	}
 
 	jsonData, err := json.Marshal(data)
@@ -112,6 +116,25 @@ func (r *RedisClient) GetAvatar(paymail string) (string, error) {
 	}
 
 	return data.Outpoint, nil
+}
+
+// GetAvatarData retrieves the full avatar data for a paymail
+func (r *RedisClient) GetAvatarData(paymail string) (*AvatarData, error) {
+	key := fmt.Sprintf("bitpic:current:%s", paymail)
+	result, err := r.client.Get(r.ctx, key).Result()
+	if err == redis.Nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get avatar: %w", err)
+	}
+
+	var data AvatarData
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal avatar data: %w", err)
+	}
+
+	return &data, nil
 }
 
 // GetFeed retrieves paginated feed items
