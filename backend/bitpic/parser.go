@@ -66,15 +66,6 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 			continue
 		}
 
-		// DEBUG: Log what we found
-		if len(tapes) > 0 {
-			for ti, tape := range tapes {
-				if len(tape) > 0 {
-					fmt.Printf("DEBUG %s: tape[%d][0] = %q\n", txid[:8], ti, tape[0])
-				}
-			}
-		}
-
 		// Search each tape for protocol prefixes
 		for _, tape := range tapes {
 			if len(tape) < 1 {
@@ -88,6 +79,9 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 					data.PubKey = tape[2]
 					data.Signature = tape[3]
 					bitpicFound = true
+					fmt.Printf("DEBUG %s: BitPic found paymail=%s\n", txid[:8], data.Paymail)
+				} else {
+					fmt.Printf("DEBUG %s: BitPic tape too short, len=%d\n", txid[:8], len(tape))
 				}
 			}
 
@@ -109,6 +103,7 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 
 	// Verify the signature
 	if err := VerifySignature(data.Paymail, data.PubKey, data.Signature); err != nil {
+		fmt.Printf("DEBUG %s: sig verify failed: %v\n", txid[:8], err)
 		return nil, fmt.Errorf("signature verification failed: %w", err)
 	}
 
