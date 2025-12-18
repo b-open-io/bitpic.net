@@ -8,6 +8,25 @@ export interface SocialProfile {
   avatar?: string;
 }
 
+export interface Ordinal {
+  origin: string;
+  outpoint: string;
+  satoshis: number;
+  script: string;
+  spend: string;
+  height: number;
+  idx: number;
+  map?: Record<string, string>;
+  data?: {
+    insc?: {
+      file?: {
+        type?: string;
+        size?: number;
+      };
+    };
+  };
+}
+
 export interface WalletState {
   wallet: ReturnType<typeof useYoursWallet> | null;
   isConnected: boolean;
@@ -16,8 +35,10 @@ export interface WalletState {
   ordAddress: string | null;
   identityAddress: string | null;
   socialProfile: SocialProfile | null;
+  ordinals: Ordinal[];
   connect: () => Promise<string | undefined>;
   disconnect: () => void;
+  refreshOrdinals: () => Promise<void>;
 }
 
 export function useWallet(): WalletState {
@@ -30,6 +51,7 @@ export function useWallet(): WalletState {
   const [socialProfile, setSocialProfile] = useState<SocialProfile | null>(
     null,
   );
+  const [ordinals, setOrdinals] = useState<Ordinal[]>([]);
 
   const resetState = useCallback(() => {
     setIsConnected(false);
@@ -38,7 +60,22 @@ export function useWallet(): WalletState {
     setOrdAddress(null);
     setIdentityAddress(null);
     setSocialProfile(null);
+    setOrdinals([]);
   }, []);
+
+  const refreshOrdinals = useCallback(async () => {
+    if (!wallet) return;
+    try {
+      const result = await wallet.getOrdinals();
+      if (Array.isArray(result)) {
+        setOrdinals(result as unknown as Ordinal[]);
+      } else if (result && "data" in result) {
+        setOrdinals((result.data || []) as unknown as Ordinal[]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch ordinals:", err);
+    }
+  }, [wallet]);
 
   useEffect(() => {
     if (!wallet) return;
@@ -109,6 +146,18 @@ export function useWallet(): WalletState {
         // Social profile may not be available
       }
 
+      // Fetch ordinals for theme tokens
+      try {
+        const result = await wallet.getOrdinals();
+        if (Array.isArray(result)) {
+          setOrdinals(result as unknown as Ordinal[]);
+        } else if (result && "data" in result) {
+          setOrdinals((result.data || []) as unknown as Ordinal[]);
+        }
+      } catch {
+        // Ordinals may not be available
+      }
+
       setIsConnected(true);
 
       return publicKey;
@@ -130,7 +179,9 @@ export function useWallet(): WalletState {
     ordAddress,
     identityAddress,
     socialProfile,
+    ordinals,
     connect,
     disconnect,
+    refreshOrdinals,
   };
 }
