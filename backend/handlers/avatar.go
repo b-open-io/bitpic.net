@@ -43,7 +43,9 @@ func NewAvatarHandler(redis *storage.RedisClient, ordfsURL string, cacheTTL time
 }
 
 // Handle fetches and returns the avatar image
-// Supports size query parameter: ?size=64, ?size=128, ?size=256, ?size=512
+// Supports query parameters:
+//   - size: 32, 64, 128, 256, 512 (resize to square)
+//   - d: URL for default/fallback image when avatar doesn't exist
 func (h *AvatarHandler) Handle(c *fiber.Ctx) error {
 	paymail := c.Params("paymail")
 	if paymail == "" {
@@ -63,13 +65,20 @@ func (h *AvatarHandler) Handle(c *fiber.Ctx) error {
 		size = nearestAllowedSize(size)
 	}
 
+	// Get default image URL parameter
+	defaultURL := c.Query("d", "")
+
 	// Get outpoint from Redis
 	outpoint, err := h.redis.GetAvatar(paymail)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Failed to fetch avatar")
 	}
 
+	// Handle missing avatar - redirect to default or return 404
 	if outpoint == "" {
+		if defaultURL != "" {
+			return c.Redirect(defaultURL, fiber.StatusTemporaryRedirect)
+		}
 		return c.Status(fiber.StatusNotFound).SendString("Avatar not found")
 	}
 

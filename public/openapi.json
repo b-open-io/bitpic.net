@@ -23,7 +23,7 @@
     "/u/{paymail}": {
       "get": {
         "summary": "Get Avatar Image",
-        "description": "Returns the avatar image for a paymail address. This is the primary endpoint for embedding avatars.",
+        "description": "Returns the avatar image for a paymail address. This is the primary endpoint for embedding avatars. Supports resizing and custom default fallback images.",
         "operationId": "getAvatarImage",
         "tags": ["Avatar"],
         "parameters": [
@@ -34,6 +34,22 @@
             "schema": { "type": "string" },
             "description": "The paymail address (e.g., alice@example.com)",
             "example": "satoshi@bitpic.net"
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "enum": [32, 64, 128, 256, 512] },
+            "description": "Resize avatar to square dimensions. Images are center-cropped and scaled.",
+            "example": 128
+          },
+          {
+            "name": "d",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uri" },
+            "description": "Default/fallback image URL. If the paymail has no avatar, redirects to this URL instead of returning 404.",
+            "example": "https://example.com/default-avatar.png"
           }
         ],
         "responses": {
@@ -46,8 +62,11 @@
               "image/webp": {}
             }
           },
+          "307": {
+            "description": "Redirect to default image URL (when avatar not found and d parameter provided)"
+          },
           "404": {
-            "description": "No avatar found for this paymail",
+            "description": "No avatar found for this paymail (when no default URL provided)",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Error" }
