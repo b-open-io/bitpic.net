@@ -93,6 +93,7 @@ func main() {
 	existsHandler := handlers.NewExistsHandler(redis)
 	broadcastHandler := handlers.NewBroadcastHandler(arcURL, redis)
 	statusHandler := handlers.NewStatusHandler(redis, subscriber)
+	paymailHandler := handlers.NewPaymailHandler(redis)
 
 	// Routes
 	app.Get("/health", handlers.Health)
@@ -102,6 +103,11 @@ func main() {
 	app.Get("/api/exists/:paymail", existsHandler.Handle)
 	app.Get("/api/status", statusHandler.Handle)
 	app.Post("/api/broadcast", broadcastHandler.Handle)
+
+	// Paymail routes
+	app.Get("/api/paymail/:handle", paymailHandler.Get)
+	app.Get("/api/paymail/:handle/available", paymailHandler.CheckAvailable)
+	app.Post("/api/paymail/register", paymailHandler.Register)
 
 	// Start server
 	log.Printf("Starting server on port %s", port)

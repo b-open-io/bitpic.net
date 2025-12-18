@@ -234,6 +234,60 @@ func (r *RedisClient) GetTotalAvatars() (int64, error) {
 	return count, nil
 }
 
+// PaymailData represents a registered paymail
+type PaymailData struct {
+	Handle         string `json:"handle"`
+	PaymentAddress string `json:"paymentAddress"`
+	PaymentPubkey  string `json:"paymentPubkey"`
+	OrdAddress     string `json:"ordAddress"`
+	IdentityPubkey string `json:"identityPubkey,omitempty"`
+	CreatedAt      int64  `json:"createdAt"`
+	PaymentTxid    string `json:"paymentTxid,omitempty"`
+}
+
+// SetPaymail stores a paymail record
+func (r *RedisClient) SetPaymail(data *PaymailData) error {
+	if data.CreatedAt == 0 {
+		data.CreatedAt = time.Now().Unix()
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal paymail data: %w", err)
+	}
+
+	key := fmt.Sprintf("paymail:%s", data.Handle)
+	if err := r.client.Set(r.ctx, key, jsonData, 0).Err(); err != nil {
+		return fmt.Errorf("failed to set paymail: %w", err)
+	}
+
+	// Add to index
+	if err := r.client.SAdd(r.ctx, "paymail:index", data.Handle).Err(); err != nil {
+		return fmt.Errorf("failed to add to index: %w", err)
+	}
+
+	return nil
+}
+
+// GetPaymail retrieves a paymail record
+func (r *RedisClient) GetPaymail(handle string) (*PaymailData, error) {
+	key := fmt.Sprintf("paymail:%s", handle)
+	result, err := r.client.Get(r.ctx, key).Result()
+	if err == redis.Nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get paymail: %w", err)
+	}
+
+	var data PaymailData
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal paymail data: %w", err)
+	}
+
+	return &data, nil
+}
+
 // Close closes the Redis connection
 func (r *RedisClient) Close() error {
 	return r.client.Close()
