@@ -3,6 +3,7 @@ package junglebus
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/b-open-io/bitpic/bitpic"
@@ -22,7 +23,21 @@ type Subscriber struct {
 	syncing        bool
 	lastBlock      uint64
 	lastBlockTime  time.Time
+
+	// Stats for batched logging
+	statsMu        sync.Mutex
+	txCount        uint64
+	blockCount     uint64
+	bitpicCount    uint64
+	parseErrors    uint64
+	lastLogBlock   uint64
+	lastLogTime    time.Time
 }
+
+const (
+	logInterval    = 10 * time.Second // Log stats every 10 seconds
+	logBlocksEvery = 1000             // Or every 1000 blocks
+)
 
 // NewSubscriber creates a new JungleBus subscriber
 func NewSubscriber(junglebusURL, subscriptionID string, redis *storage.RedisClient) *Subscriber {
@@ -30,6 +45,7 @@ func NewSubscriber(junglebusURL, subscriptionID string, redis *storage.RedisClie
 		subscriptionID: subscriptionID,
 		junglebusURL:   junglebusURL,
 		redis:          redis,
+		lastLogTime:    time.Now(),
 	}
 }
 
@@ -99,7 +115,9 @@ func (s *Subscriber) GetStatus() (connected bool, syncing bool, lastBlock uint64
 
 // onTransaction handles confirmed transactions
 func (s *Subscriber) onTransaction(tx *models.TransactionResponse) {
-	log.Printf("TX received: %s @ block %d", tx.Id, tx.BlockHeight)
+	s.statsMu.Lock()
+	s.txCount++
+	s.statsMu.Unlock()
 	s.processTransaction(tx, true)
 }
 
@@ -120,10 +138,25 @@ func (s *Subscriber) onStatus(status *models.ControlResponse) {
 	case "block-done":
 		s.lastBlock = uint64(status.Block)
 		s.lastBlockTime = time.Now()
-		// Save progress every block
+		// Save progress every block (silently)
 		s.redis.SetLastBlock(uint64(status.Block))
-		// Log block completion
-		log.Printf("Block %d done", status.Block)
+
+		// Batched logging
+		s.statsMu.Lock()
+		s.blockCount++
+		blocksSinceLog := s.lastBlock - s.lastLogBlock
+		timeSinceLog := time.Since(s.lastLogTime)
+
+		// Log if enough blocks or enough time has passed
+		if blocksSinceLog >= logBlocksEvery || timeSinceLog >= logInterval {
+			log.Printf("Sync: block %d | %d blocks, %d txs, %d bitpics indexed",
+				s.lastBlock, s.blockCount, s.txCount, s.bitpicCount)
+			s.lastLogBlock = s.lastBlock
+			s.lastLogTime = time.Now()
+			s.blockCount = 0
+			s.txCount = 0
+		}
+		s.statsMu.Unlock()
 	case "error":
 		log.Printf("JungleBus error: %s", status.Message)
 	}
@@ -143,7 +176,10 @@ func (s *Subscriber) processTransaction(tx *models.TransactionResponse, confirme
 	// Parse BitPic data
 	data, err := bitpic.ParseTransaction(txBytes)
 	if err != nil {
-		log.Printf("Parse failed for %s: %v", tx.Id, err)
+		// Silently ignore non-BitPic transactions (expected)
+		s.statsMu.Lock()
+		s.parseErrors++
+		s.statsMu.Unlock()
 		return
 	}
 
@@ -156,9 +192,14 @@ func (s *Subscriber) processTransaction(tx *models.TransactionResponse, confirme
 
 	// Store in Redis
 	if err := s.redis.SetAvatar(data.Paymail, data.Outpoint, tx.Id, timestamp, confirmed); err != nil {
-		log.Printf("Failed to store avatar: %v", err)
+		log.Printf("Failed to store avatar for %s: %v", data.Paymail, err)
 		return
 	}
+
+	// Always log BitPic matches - these are rare and important
+	s.statsMu.Lock()
+	s.bitpicCount++
+	s.statsMu.Unlock()
 
 	status := "unconfirmed"
 	if confirmed {
