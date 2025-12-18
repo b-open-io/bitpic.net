@@ -143,7 +143,7 @@ func (s *Subscriber) processTransaction(tx *models.TransactionResponse, confirme
 	// Parse BitPic data
 	data, err := bitpic.ParseTransaction(txBytes)
 	if err != nil {
-		// Not a BitPic transaction, ignore
+		log.Printf("Parse failed for %s: %v", tx.Id, err)
 		return
 	}
 
