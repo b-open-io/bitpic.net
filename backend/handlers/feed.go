@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"os"
 	"strconv"
 
@@ -58,6 +59,7 @@ func (h *FeedHandler) Handle(c *fiber.Ctx) error {
 	// Get feed items
 	items, total, err := h.redis.GetFeed(offset, limit, h.ordfsBaseURL)
 	if err != nil {
+		log.Printf("Feed lookup failed: offset=%d limit=%d error=%v", offset, limit, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch feed",
 		})

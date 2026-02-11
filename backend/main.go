@@ -132,6 +132,8 @@ func errorHandler(c *fiber.Ctx, err error) error {
 		code = e.Code
 	}
 
+	log.Printf("Unhandled error: method=%s path=%s status=%d error=%v", c.Method(), c.Path(), code, err)
+
 	return c.Status(code).JSON(fiber.Map{
 		"error": err.Error(),
 	})

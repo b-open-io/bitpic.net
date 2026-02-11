@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"time"
 
 	"github.com/b-open-io/bitpic/junglebus"
@@ -36,6 +37,7 @@ func (h *StatusHandler) Handle(c *fiber.Ctx) error {
 	// Get total avatars
 	totalAvatars, err := h.redis.GetTotalAvatars()
 	if err != nil {
+		log.Printf("Status lookup failed: error=%v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to get total avatars",
 		})

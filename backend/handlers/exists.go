@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"log"
+
 	"github.com/b-open-io/bitpic/storage"
 	"github.com/gofiber/fiber/v2"
 )
@@ -26,6 +28,7 @@ func (h *ExistsHandler) Handle(c *fiber.Ctx) error {
 
 	exists, err := h.redis.Exists(paymail)
 	if err != nil {
+		log.Printf("Exists lookup failed: paymail=%s error=%v", paymail, err)
 		return c.Status(fiber.StatusInternalServerError).SendString("0")
 	}
 
