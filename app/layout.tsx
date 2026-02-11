@@ -56,6 +56,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} ${spectral.variable} font-sans antialiased min-h-screen flex flex-col bg-background text-foreground`}
       >
         <Providers>

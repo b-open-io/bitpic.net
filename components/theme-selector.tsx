@@ -27,6 +27,7 @@ export function ThemeSelector() {
   const { resolvedTheme, setTheme } = useTheme();
   const { activeOrigin, activeTheme, loadTheme, resetTheme, isLoading } =
     useThemeToken(ordinals);
+  const [mounted, setMounted] = useState(false);
 
   // Filter ordinals for type === "theme" (not app === "ThemeToken")
   const themeTokens = useMemo(
@@ -36,6 +37,10 @@ export function ThemeSelector() {
 
   const [themesMetadata, setThemesMetadata] = useState<ThemeMetadata[]>([]);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Fetch metadata for all theme tokens
   const fetchMetadata = useCallback(async () => {
@@ -76,6 +81,7 @@ export function ThemeSelector() {
   }, [fetchMetadata]);
 
   const hasThemeTokens = isConnected && themeTokens.length > 0;
+  const effectiveTheme = mounted ? resolvedTheme : undefined;
 
   return (
     <Popover>
@@ -85,9 +91,11 @@ export function ThemeSelector() {
           size="icon"
           className={cn("h-8 w-8 relative", activeOrigin && "text-primary")}
         >
-          {activeOrigin ? (
+          {!mounted ? (
+            <Sun className="h-4 w-4" />
+          ) : activeOrigin ? (
             <Palette className="h-4 w-4" />
-          ) : resolvedTheme === "dark" ? (
+          ) : effectiveTheme === "dark" ? (
             <Moon className="h-4 w-4" />
           ) : (
             <Sun className="h-4 w-4" />
@@ -104,7 +112,7 @@ export function ThemeSelector() {
           <p className="text-xs font-medium text-muted-foreground mb-2">Mode</p>
           <div className="flex gap-1">
             <Button
-              variant={resolvedTheme === "light" ? "default" : "outline"}
+              variant={effectiveTheme === "light" ? "default" : "outline"}
               size="sm"
               className="flex-1 h-8 gap-1.5"
               onClick={() => setTheme("light")}
@@ -113,7 +121,7 @@ export function ThemeSelector() {
               Light
             </Button>
             <Button
-              variant={resolvedTheme === "dark" ? "default" : "outline"}
+              variant={effectiveTheme === "dark" ? "default" : "outline"}
               size="sm"
               className="flex-1 h-8 gap-1.5"
               onClick={() => setTheme("dark")}
