@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import type { FeedItem, FeedResponse } from "@/lib/types";
 import { formatRelativeTime, getAvatarUrl } from "@/lib/utils";
 
@@ -11,24 +11,6 @@ async function fetchFeedPage(offset: number): Promise<FeedResponse> {
     throw new Error(`Failed to fetch feed: ${response.statusText}`);
   }
   return response.json();
-}
-
-// Separate query for mempool items (always first page, unconfirmed only)
-async function fetchMempool(): Promise<FeedItem[]> {
-  const response = await fetch("/api/feed?offset=0&limit=50");
-  if (!response.ok) {
-    throw new Error(`Failed to fetch mempool: ${response.statusText}`);
-  }
-  const data: FeedResponse = await response.json();
-  return data.items.filter((item) => item.confirmed === false);
-}
-
-export function useMempool() {
-  return useQuery({
-    queryKey: ["mempool"],
-    queryFn: fetchMempool,
-    refetchInterval: 5000, // Check mempool more frequently
-  });
 }
 
 export function useInfiniteFeed() {

@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  createContext,
+  createElement,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useYoursWallet } from "yours-wallet-provider";
 
 export interface SocialProfile {
@@ -79,7 +88,9 @@ export interface WalletState {
   refreshOrdinals: () => Promise<void>;
 }
 
-export function useWallet(): WalletState {
+const WalletContext = createContext<WalletState | null>(null);
+
+export function WalletStateProvider({ children }: { children: ReactNode }) {
   const wallet = useYoursWallet();
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
@@ -125,14 +136,11 @@ export function useWallet(): WalletState {
       removeListener?: (event: string, handler: () => void) => void;
     };
 
-    // Set up event listeners for wallet state changes
     const handleSignedOut = () => {
-      console.log("Wallet signed out");
       resetState();
     };
 
     const handleSwitchAccount = () => {
-      console.log("Wallet account switched");
       resetState();
     };
 
@@ -143,7 +151,6 @@ export function useWallet(): WalletState {
       // Events may not be supported
     }
 
-    // Cleanup listeners on unmount
     return () => {
       try {
         walletWithEvents.removeListener?.("signedOut", handleSignedOut);
@@ -173,22 +180,20 @@ export function useWallet(): WalletState {
         setIdentityAddress(addresses.identityAddress);
       }
 
-      // Fetch social profile from wallet
-      try {
-        const profile = await wallet.getSocialProfile();
-        if (profile) {
-          setSocialProfile({
-            displayName: profile.displayName,
-            avatar: profile.avatar,
-          });
-        }
-      } catch {
-        // Social profile may not be available
+      const [profileResult, ordinalsResult] = await Promise.allSettled([
+        wallet.getSocialProfile(),
+        wallet.getOrdinals(),
+      ]);
+
+      if (profileResult.status === "fulfilled" && profileResult.value) {
+        setSocialProfile({
+          displayName: profileResult.value.displayName,
+          avatar: profileResult.value.avatar,
+        });
       }
 
-      // Fetch ordinals for theme tokens
-      try {
-        const result = await wallet.getOrdinals();
+      if (ordinalsResult.status === "fulfilled") {
+        const result = ordinalsResult.value;
         let rawOrdinals: RawOrdinal[] = [];
         if (Array.isArray(result)) {
           rawOrdinals = result as RawOrdinal[];
@@ -196,12 +201,9 @@ export function useWallet(): WalletState {
           rawOrdinals = (result.data || []) as RawOrdinal[];
         }
         setOrdinals(normalizeOrdinals(rawOrdinals));
-      } catch {
-        // Ordinals may not be available
       }
 
       setIsConnected(true);
-
       return publicKey;
     } catch (error) {
       console.error("Failed to connect wallet:", error);
@@ -213,17 +215,42 @@ export function useWallet(): WalletState {
     resetState();
   }, [resetState]);
 
-  return {
-    wallet,
-    isConnected,
-    address,
-    pubKey,
-    ordAddress,
-    identityAddress,
-    socialProfile,
-    ordinals,
-    connect,
-    disconnect,
-    refreshOrdinals,
-  };
+  const value = useMemo(
+    () => ({
+      wallet,
+      isConnected,
+      address,
+      pubKey,
+      ordAddress,
+      identityAddress,
+      socialProfile,
+      ordinals,
+      connect,
+      disconnect,
+      refreshOrdinals,
+    }),
+    [
+      wallet,
+      isConnected,
+      address,
+      pubKey,
+      ordAddress,
+      identityAddress,
+      socialProfile,
+      ordinals,
+      connect,
+      disconnect,
+      refreshOrdinals,
+    ],
+  );
+
+  return createElement(WalletContext.Provider, { value }, children);
+}
+
+export function useWallet(): WalletState {
+  const context = useContext(WalletContext);
+  if (!context) {
+    throw new Error("useWallet must be used within WalletProvider");
+  }
+  return context;
 }

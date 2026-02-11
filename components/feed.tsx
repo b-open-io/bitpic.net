@@ -5,11 +5,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { AvatarCard } from "@/components/avatar-card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  transformFeedItem,
-  useInfiniteFeed,
-  useMempool,
-} from "@/hooks/use-feed";
+import { transformFeedItem, useInfiniteFeed } from "@/hooks/use-feed";
 
 export function Feed() {
   const {
@@ -20,7 +16,6 @@ export function Feed() {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteFeed();
-  const { data: mempoolItems = [] } = useMempool();
 
   // Intersection observer for infinite scroll
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -79,7 +74,10 @@ export function Feed() {
       .filter((item) => item.confirmed !== false)
       .map(transformFeedItem) ?? [];
 
-  const unconfirmedItems = mempoolItems.map(transformFeedItem);
+  const unconfirmedItems =
+    data?.pages[0]?.items
+      .filter((item) => item.confirmed === false)
+      .map(transformFeedItem) ?? [];
 
   return (
     <section className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">

@@ -133,7 +133,7 @@ OP_RETURN
 
         <p className="mt-4">Here&apos;s an example:</p>
 
-        <Link
+        <a
           href="/u/644@moneybutton.com"
           className="block p-4 border border-border hover:bg-muted/50 transition-colors"
         >
@@ -146,7 +146,7 @@ OP_RETURN
             alt="644@moneybutton.com avatar"
             className="mt-4 w-24 h-24 object-cover"
           />
-        </Link>
+        </a>
 
         <h2 className="text-2xl font-bold tracking-tight mt-8">
           Step 3. Update
