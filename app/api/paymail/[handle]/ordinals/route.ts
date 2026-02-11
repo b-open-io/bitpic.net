@@ -9,7 +9,13 @@ export async function POST(
 ) {
   try {
     const { handle: rawHandle } = await params;
-    const handle = extractHandle(rawHandle);
+    const handle = extractHandle(rawHandle).toLowerCase();
+    if (!handle) {
+      return NextResponse.json(
+        { error: "Invalid paymail handle or domain" },
+        { status: 400 },
+      );
+    }
 
     // Fetch paymail data from Go backend
     const response = await fetch(`${API_URL}/api/paymail/${handle}`);

@@ -9,11 +9,11 @@ export async function GET(
 ) {
   try {
     const { handle: rawHandle } = await params;
-    const handle = extractHandle(rawHandle);
+    const handle = extractHandle(rawHandle).toLowerCase();
 
     if (!handle) {
       return NextResponse.json(
-        { error: "Handle is required" },
+        { error: "Invalid paymail handle or domain" },
         { status: 400 },
       );
     }

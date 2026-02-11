@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://api.bitpic.network";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL;
+
+if (!BACKEND_URL) {
+  throw new Error("Missing required env var: NEXT_PUBLIC_API_URL");
+}
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
