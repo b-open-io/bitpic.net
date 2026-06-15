@@ -16,6 +16,10 @@ export async function GET(request: NextRequest) {
       a9f510c16bde: `${baseUrl}/api/paymail/{alias}@{domain.tld}/verify-pubkey/{pubkey}`,
       // Public Profile - BRFC f12f968c92d6
       f12f968c92d6: `${baseUrl}/api/paymail/{alias}@{domain.tld}/public-profile`,
+      // P2P Payment Destination - BRFC 2a40af698840
+      "2a40af698840": `${baseUrl}/api/paymail/{alias}@{domain.tld}/p2p-payment-destination`,
+      // P2P Receive Transaction - BRFC 5f1323cddf31
+      "5f1323cddf31": `${baseUrl}/api/paymail/{alias}@{domain.tld}/receive-transaction`,
     },
   });
 }
