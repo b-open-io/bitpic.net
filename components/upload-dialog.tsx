@@ -275,13 +275,21 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           encoding: "utf8",
         });
 
-        if (signedMessage.error || !signedMessage.sig) {
+        if (
+          signedMessage.error ||
+          !signedMessage.sig ||
+          !signedMessage.pubKey
+        ) {
           throw new Error(signedMessage.error || "Failed to sign message");
         }
 
         const txData: BitPicRefTransactionData = {
           paymail,
-          publicKey: pubKey,
+          // Embed the key that actually produced the signature (signBsm derives
+          // a message-signing key, distinct from the wallet's identity key).
+          // The backend recovers the signer from the signature and requires it
+          // to match this embedded pubkey.
+          publicKey: signedMessage.pubKey,
           signature: signedMessage.sig,
           ordinalRef,
         };
@@ -314,13 +322,19 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           encoding: "utf8",
         });
 
-        if (signedMessage.error || !signedMessage.sig) {
+        if (
+          signedMessage.error ||
+          !signedMessage.sig ||
+          !signedMessage.pubKey
+        ) {
           throw new Error(signedMessage.error || "Failed to sign message");
         }
 
         const txData: BitPicTransactionData = {
           paymail,
-          publicKey: pubKey,
+          // Embed the signing key (see note above) so backend verification of
+          // the BSM signature against this pubkey succeeds.
+          publicKey: signedMessage.pubKey,
           signature: signedMessage.sig,
           imageData: croppedImage,
           mimeType: validation.mimeType,
