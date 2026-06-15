@@ -383,29 +383,28 @@ OP_RETURN
         </p>
 
         <p>
-          Outpoint references use the special mime type{" "}
+          A reference is a B record with mime type{" "}
           <code className="bg-muted px-1 py-0.5 font-mono text-sm">
-            application/x-bitpic-ref
+            text/uri-list
           </code>{" "}
-          and contain a pointer to the outpoint containing the image:
+          whose body is a single URI pointing at the image:
         </p>
 
-        <pre className="bg-muted p-4 overflow-x-auto font-mono text-sm">
-          {`OP_0
-OP_RETURN
-19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut
-  [txid_vout]
-  application/x-bitpic-ref
-  utf-8
-|
-18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p
-  [Paymail]
-  [Pubkey]
-  [Sig of txid_vout]`}
-        </pre>
+        <ul className="list-disc list-inside space-y-1 text-sm">
+          <li>
+            <code className="font-mono">ord://&lt;txid&gt;_&lt;vout&gt;</code> —
+            a 1Sat Ordinal inscription
+          </li>
+          <li>
+            <code className="font-mono">b://&lt;txid&gt;_&lt;vout&gt;</code> — a
+            B protocol file
+          </li>
+        </ul>
 
-        <p>
-          When serving the avatar, BitPic resolves the reference via{" "}
+        <p className="text-sm text-muted-foreground">
+          The indexer resolves the first{" "}
+          <code className="font-mono">ord://</code> or{" "}
+          <code className="font-mono">b://</code> URI via{" "}
           <a
             href="https://ordfs.network"
             target="_blank"
@@ -413,8 +412,31 @@ OP_RETURN
             className="text-primary underline underline-offset-4"
           >
             ORDFS
-          </a>{" "}
-          to fetch the actual image data from the referenced outpoint.
+          </a>
+          ; other schemes (e.g. <code className="font-mono">c://</code>,{" "}
+          <code className="font-mono">https://</code>) are ignored. The
+          signature signs the URI string. The referenced content must be an
+          image.
+        </p>
+
+        <pre className="bg-muted p-4 overflow-x-auto font-mono text-sm">
+          {`OP_0
+OP_RETURN
+19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut
+  ord://[txid]_[vout]
+  text/uri-list
+  utf-8
+|
+18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p
+  [Paymail]
+  [Pubkey]
+  [Sig of the URI]`}
+        </pre>
+
+        <p>
+          To change your avatar, publish a new BitPic record (an upload or a new
+          reference) — the indexer always serves your newest record for a
+          paymail.
         </p>
 
         <p className="mt-4">

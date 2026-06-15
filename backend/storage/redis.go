@@ -60,6 +60,15 @@ func NewRedisClient(redisURL string) (*RedisClient, error) {
 
 // SetAvatar stores avatar data for a paymail
 func (r *RedisClient) SetAvatar(paymail, outpoint, txid string, timestamp int64, confirmed bool, isRef bool, refOrigin string) error {
+	// Newest-wins: a user's latest BitPic record is their avatar. Don't let an
+	// older record (e.g. a historical re-sync) clobber a newer one. Updates to
+	// the same tx (mempool -> confirmed) are always allowed.
+	if existing, _ := r.GetAvatarData(paymail); existing != nil {
+		if existing.TxID != txid && timestamp < existing.Timestamp {
+			return nil
+		}
+	}
+
 	data := AvatarData{
 		Outpoint:  outpoint,
 		Timestamp: timestamp,

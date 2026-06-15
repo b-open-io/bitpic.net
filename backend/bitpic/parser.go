@@ -7,43 +7,41 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bsv-blockchain/go-script-templates/template/bitcom"
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 )
 
 const (
-	// BitPicPrefix is the address for BitPic protocol transactions
+	// BitPicPrefix is the Bitcom protocol address for BitPic metadata.
 	BitPicPrefix = "18pAqbYqhzErT6Zk3a5dwxHtB9icv8jH2p"
-	// BProtocolPrefix is the address for B protocol (file upload)
-	BProtocolPrefix = "19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut"
-	// BitPicRefMime is the mime type for ordinal references
-	BitPicRefMime = "application/x-bitpic-ref"
+	// UriListMime marks a B record whose data is a reference (text/uri-list).
+	UriListMime = "text/uri-list"
+	// LegacyRefMime is the original (pre-uri-list) BitPic reference media type.
+	LegacyRefMime = "application/x-bitpic-ref"
 )
 
-// Script opcodes
-const (
-	OpFALSE     = 0x00
-	OpRETURN    = 0x6a
-	OpPUSHDATA1 = 0x4c
-	OpPUSHDATA2 = 0x4d
-	OpPUSHDATA4 = 0x4e
-	OpPipe      = 0x7c // Pipe separator for multi-protocol OP_RETURN
-)
-
-// BitPicData represents parsed BitPic protocol data from a transaction
+// BitPicData represents parsed BitPic protocol data from a transaction.
 type BitPicData struct {
-	Paymail    string
-	PubKey     string
-	Signature  string
-	ImageHash  string // SHA256 hash of image data (hex) - empty for refs
-	Outpoint   string // Format: txid_vout (where image is stored)
-	TxID       string
-	Timestamp  int64
-	IsRef      bool   // True if this is an ordinal reference
-	RefOrigin  string // For refs: the ordinal origin being referenced
+	Paymail   string
+	PubKey    string
+	Signature string
+	ImageHash string // SHA256 of embedded image (hex); empty for references
+	Outpoint  string // txid_vout of the BitPic output
+	TxID      string
+	Timestamp int64
+	IsRef     bool   // true when the avatar references existing content
+	RefOrigin string // txid_vout of the referenced content (for refs)
 }
 
-// ParseTransaction parses a raw transaction and extracts BitPic protocol data
+// ParseTransaction extracts BitPic protocol data from a raw transaction.
+//
+// Layout (two Bitcom protocols separated by a pipe):
+//
+//	OP_FALSE OP_RETURN
+//	  19Hxig… (B)       <image|uri>  <media-type>  <encoding>
+//	  |
+//	  18pAq…  (BitPic)  <paymail>    <pubkey>      <signature>
 func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 	tx, err := transaction.NewTransactionFromBytes(txBytes)
 	if err != nil {
@@ -51,105 +49,130 @@ func ParseTransaction(txBytes []byte) (*BitPicData, error) {
 	}
 
 	txid := tx.TxID().String()
-	data := &BitPicData{
-		TxID: txid,
-	}
-
-	// Find BitPic protocol data
-	bitpicFound := false
-	bProtocolFound := false
-	var imageData []byte
-	var mimeType string
 
 	for i, output := range tx.Outputs {
-		ls := output.LockingScript
-
-		// Try to extract OP_RETURN data
-		if !ls.IsData() {
+		bc := bitcom.Decode(output.LockingScript)
+		if bc == nil || len(bc.Protocols) == 0 {
 			continue
 		}
 
-		// Parse the script into tapes with raw binary data
-		tapes, rawTapes, err := extractTapesWithRaw(ls)
-		if err != nil {
-			continue
-		}
+		var b *bitcom.B
+		var paymail, pubKey, sig string
+		bitpicFound := false
 
-		// Search each tape for protocol prefixes
-		for ti, tape := range tapes {
-			if len(tape) < 1 {
-				continue
-			}
-
-			// Check for B protocol (image data or reference)
-			if tape[0] == BProtocolPrefix && !bProtocolFound && len(rawTapes[ti]) >= 2 {
-				data.Outpoint = fmt.Sprintf("%s_%d", txid, i)
-				imageData = rawTapes[ti][1] // Raw data (image bytes or ref string)
-
-				// Check mime type if present
-				if len(tape) >= 3 {
-					mimeType = tape[2]
+		for _, proto := range bc.Protocols {
+			switch proto.Protocol {
+			case bitcom.BPrefix:
+				b = bitcom.DecodeB(proto.Script)
+			case BitPicPrefix:
+				if p, pk, s, ok := parseBitPicTape(proto.Script); ok {
+					paymail, pubKey, sig = p, pk, s
+					bitpicFound = true
 				}
-
-				bProtocolFound = true
-			}
-
-			// Check for BitPic prefix
-			if tape[0] == BitPicPrefix && !bitpicFound && len(tape) >= 4 {
-				data.Paymail = tape[1]
-				data.PubKey = tape[2]
-				data.Signature = tape[3]
-				bitpicFound = true
 			}
 		}
-	}
 
-	if !bitpicFound {
-		return nil, errors.New("BitPic protocol data not found in transaction")
-	}
-
-	if !bProtocolFound {
-		return nil, errors.New("B protocol (image) data not found in transaction")
-	}
-
-	if len(imageData) == 0 {
-		return nil, errors.New("no data found in B protocol")
-	}
-
-	// Check if this is an ordinal reference
-	if mimeType == BitPicRefMime {
-		// This is a reference to an existing ordinal
-		refOrigin := string(imageData) // The reference is stored as plain text
-		if !isValidOrdinalRef(refOrigin) {
-			return nil, fmt.Errorf("invalid ordinal reference format: %s", refOrigin)
+		if !bitpicFound || b == nil || len(b.Data) == 0 {
+			continue
 		}
-		data.IsRef = true
-		data.RefOrigin = refOrigin
-		// For refs, we sign the reference string itself
-		if err := VerifySignature(refOrigin, data.PubKey, data.Signature); err != nil {
-			return nil, fmt.Errorf("signature verification failed: %w", err)
+
+		data := &BitPicData{
+			TxID:      txid,
+			Outpoint:  fmt.Sprintf("%s_%d", txid, i),
+			Paymail:   paymail,
+			PubKey:    pubKey,
+			Signature: sig,
 		}
-	} else {
-		// Regular image upload - hash the image data
-		hash := sha256.Sum256(imageData)
-		data.ImageHash = hex.EncodeToString(hash[:])
-		// Verify the signature against the image hash
-		if err := VerifySignature(data.ImageHash, data.PubKey, data.Signature); err != nil {
-			return nil, fmt.Errorf("signature verification failed: %w", err)
+
+		mediaType := string(b.MediaType)
+		switch {
+		case mediaType == UriListMime:
+			uri, refOrigin, ok := parseUriListRef(b.Data)
+			if !ok {
+				return nil, errors.New("no resolvable ord:// or b:// reference in uri-list")
+			}
+			data.IsRef = true
+			data.RefOrigin = refOrigin
+			if err := VerifySignatureBytes([]byte(uri), pubKey, sig); err != nil {
+				return nil, fmt.Errorf("signature verification failed: %w", err)
+			}
+			return data, nil
+
+		case mediaType == LegacyRefMime:
+			refOrigin := normalizeOutpoint(string(b.Data))
+			if !isValidOutpoint(refOrigin) {
+				return nil, fmt.Errorf("invalid ordinal reference format: %s", refOrigin)
+			}
+			data.IsRef = true
+			data.RefOrigin = refOrigin
+			if err := VerifySignatureBytes([]byte(string(b.Data)), pubKey, sig); err != nil {
+				return nil, fmt.Errorf("signature verification failed: %w", err)
+			}
+			return data, nil
+
+		case strings.HasPrefix(mediaType, "image/"):
+			hash := sha256.Sum256(b.Data)
+			data.ImageHash = hex.EncodeToString(hash[:])
+			if err := VerifySignatureBytes(hash[:], pubKey, sig); err != nil {
+				return nil, fmt.Errorf("signature verification failed: %w", err)
+			}
+			return data, nil
+
+		default:
+			return nil, fmt.Errorf("unsupported BitPic media type: %s", mediaType)
 		}
 	}
 
-	return data, nil
+	return nil, errors.New("BitPic protocol data not found in transaction")
 }
 
-// isValidOrdinalRef validates the ordinal reference format (txid_vout)
-func isValidOrdinalRef(ref string) bool {
-	parts := strings.Split(ref, "_")
-	if len(parts) != 2 {
-		return false
+// parseBitPicTape reads the BitPic tape's pushdata: paymail, pubkey, signature.
+func parseBitPicTape(scriptBytes []byte) (paymail, pubKey, sig string, ok bool) {
+	chunks, err := script.NewFromBytes(scriptBytes).Chunks()
+	if err != nil || len(chunks) < 3 {
+		return "", "", "", false
 	}
-	// txid should be 64 hex chars
-	if len(parts[0]) != 64 {
+	return string(chunks[0].Data), string(chunks[1].Data), string(chunks[2].Data), true
+}
+
+// parseUriListRef returns the first resolvable URI (ord:// or b://) and its
+// normalized txid_vout. c://, https:// and other schemes are skipped (no
+// indexer). Comment lines (#) and blanks are ignored.
+func parseUriListRef(data []byte) (uri, refOrigin string, ok bool) {
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		var raw string
+		switch {
+		case strings.HasPrefix(line, "ord://"):
+			raw = strings.TrimPrefix(line, "ord://")
+		case strings.HasPrefix(line, "b://"):
+			raw = strings.TrimPrefix(line, "b://")
+		default:
+			continue
+		}
+		outpoint := normalizeOutpoint(raw)
+		if isValidOutpoint(outpoint) {
+			return line, outpoint, true
+		}
+	}
+	return "", "", false
+}
+
+// normalizeOutpoint converts txid.vout to txid_vout.
+func normalizeOutpoint(outpoint string) string {
+	if dot := strings.LastIndex(outpoint, "."); dot > 0 {
+		return outpoint[:dot] + "_" + outpoint[dot+1:]
+	}
+	return outpoint
+}
+
+// isValidOutpoint validates a txid_vout reference.
+func isValidOutpoint(outpoint string) bool {
+	parts := strings.Split(outpoint, "_")
+	if len(parts) != 2 || len(parts[0]) != 64 {
 		return false
 	}
 	for _, c := range parts[0] {
@@ -157,126 +180,11 @@ func isValidOrdinalRef(ref string) bool {
 			return false
 		}
 	}
-	// vout should be a non-negative integer
+	if len(parts[1]) == 0 {
+		return false
+	}
 	for _, c := range parts[1] {
 		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return len(parts[1]) > 0
-}
-
-// extractTapesWithRaw parses an OP_RETURN script into tapes with both string and raw representations
-func extractTapesWithRaw(ls *script.Script) ([][]string, [][][]byte, error) {
-	var tapes [][]string
-	var rawTapes [][][]byte
-	var currentTape []string
-	var currentRawTape [][]byte
-
-	scriptBytes := *ls
-	index := 0
-
-	for index < len(scriptBytes) {
-		// Skip OP_FALSE and OP_RETURN at the beginning
-		if index == 0 && scriptBytes[index] == OpFALSE {
-			index++
-			continue
-		}
-		if index == 1 && scriptBytes[index] == OpRETURN {
-			index++
-			continue
-		}
-		// Handle case where script starts with just OP_RETURN
-		if index == 0 && scriptBytes[index] == OpRETURN {
-			index++
-			continue
-		}
-
-		if index >= len(scriptBytes) {
-			break
-		}
-
-		opcode := scriptBytes[index]
-		index++
-
-		var dataLen int
-
-		// Handle different push opcodes
-		switch {
-		case opcode > 0 && opcode <= 75:
-			// Direct push (1-75 bytes)
-			dataLen = int(opcode)
-		case opcode == OpPUSHDATA1:
-			if index >= len(scriptBytes) {
-				break
-			}
-			dataLen = int(scriptBytes[index])
-			index++
-		case opcode == OpPUSHDATA2:
-			if index+1 >= len(scriptBytes) {
-				break
-			}
-			dataLen = int(scriptBytes[index]) | int(scriptBytes[index+1])<<8
-			index += 2
-		case opcode == OpPUSHDATA4:
-			if index+3 >= len(scriptBytes) {
-				break
-			}
-			dataLen = int(scriptBytes[index]) |
-				int(scriptBytes[index+1])<<8 |
-				int(scriptBytes[index+2])<<16 |
-				int(scriptBytes[index+3])<<24
-			index += 4
-		default:
-			// Unknown opcode, skip
-			continue
-		}
-
-		// Extract the data
-		if index+dataLen > len(scriptBytes) {
-			break
-		}
-		data := make([]byte, dataLen)
-		copy(data, scriptBytes[index:index+dataLen])
-		index += dataLen
-
-		// Check for pipe separator
-		if len(data) == 1 && data[0] == OpPipe {
-			// Start a new tape
-			if len(currentTape) > 0 {
-				tapes = append(tapes, currentTape)
-				rawTapes = append(rawTapes, currentRawTape)
-				currentTape = nil
-				currentRawTape = nil
-			}
-			continue
-		}
-
-		// Store raw data
-		currentRawTape = append(currentRawTape, data)
-
-		// Try to convert to string, otherwise use hex
-		str := string(data)
-		if isPrintable(str) {
-			currentTape = append(currentTape, str)
-		} else {
-			currentTape = append(currentTape, hex.EncodeToString(data))
-		}
-	}
-
-	// Don't forget the last tape
-	if len(currentTape) > 0 {
-		tapes = append(tapes, currentTape)
-		rawTapes = append(rawTapes, currentRawTape)
-	}
-
-	return tapes, rawTapes, nil
-}
-
-// isPrintable checks if a string contains only printable characters
-func isPrintable(s string) bool {
-	for _, r := range s {
-		if r < 32 || r > 126 {
 			return false
 		}
 	}

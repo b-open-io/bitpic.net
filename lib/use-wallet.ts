@@ -29,6 +29,8 @@ const services = new OneSatServices("main");
 export interface SocialProfile {
   displayName?: string;
   avatar?: string;
+  /** Outpoint (txid_vout) of the profile image ordinal, if on-chain. */
+  imageOutpoint?: string;
 }
 
 // Normalized ordinal structure for our app and SDK compatibility.
@@ -100,12 +102,21 @@ function normalizeOrdinals(outputs: WalletOutput[]): Ordinal[] {
   });
 }
 
-// Convert a profile image reference (e.g. "1sat://<outpoint>") to a fetchable URL.
+// Extract a txid_vout outpoint from an on-chain image reference
+// (1sat://, ord://, b://, or a bare outpoint). Returns undefined for http(s).
+function extractImageOutpoint(image?: string): string | undefined {
+  if (!image) return undefined;
+  const stripped = image.replace(/^(1sat|ord|b|c):\/\//, "");
+  if (/^https?:\/\//.test(stripped)) return undefined;
+  const normalized = toUnderscoreOutpoint(stripped);
+  return /^[a-fA-F0-9]{64}_\d+$/.test(normalized) ? normalized : undefined;
+}
+
+// Convert a profile image reference to a fetchable URL.
 function resolveProfileImage(image?: string): string | undefined {
   if (!image) return undefined;
-  if (image.startsWith("1sat://")) {
-    return `https://ordfs.network/content/${image.slice("1sat://".length)}`;
-  }
+  const outpoint = extractImageOutpoint(image);
+  if (outpoint) return `https://ordfs.network/content/${outpoint}`;
   return image;
 }
 
@@ -218,10 +229,13 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
           : typeof profile?.alternateName === "string"
             ? profile.alternateName
             : undefined;
-      const avatar = resolveProfileImage(
-        typeof profile?.image === "string" ? profile.image : undefined,
+      const rawImage =
+        typeof profile?.image === "string" ? profile.image : undefined;
+      const avatar = resolveProfileImage(rawImage);
+      const imageOutpoint = extractImageOutpoint(rawImage);
+      setSocialProfile(
+        displayName || avatar ? { displayName, avatar, imageOutpoint } : null,
       );
-      setSocialProfile(displayName || avatar ? { displayName, avatar } : null);
     }
 
     if (ordinalsResult.status === "fulfilled") {

@@ -20,6 +20,7 @@
         "@scalar/nextjs-api-reference": "^0.9.5",
         "@tanstack/react-query": "^5.90.12",
         "@theme-token/sdk": "^0.0.12",
+        "bitcoin-image": "^0.0.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "lucide-react": "^0.561.0",
@@ -398,6 +399,8 @@
     "bindings": ["bindings@1.5.0", "", { "dependencies": { "file-uri-to-path": "1.0.0" } }, "sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ=="],
 
     "bitcoin-auth": ["bitcoin-auth@0.0.8", "", { "peerDependencies": { "@bsv/sdk": "^2.0.6", "typescript": "^5.8.3" } }, "sha512-pU/ozaXjWMsF/Tmc3ZFU1OotMHdV/v07m4MZ7N8Y10LM6axq6ZnUvAKw3iONLNGUtwtelwVn2/sL4XtliVVLIg=="],
+
+    "bitcoin-image": ["bitcoin-image@0.0.3", "", { "peerDependencies": { "react": "*" }, "optionalPeers": ["react"] }, "sha512-oIsEW9TCcFY8bOrrm9CEcuQzyIOfpfBExNzNTCn5XxrMorkJKjqYGDo8Xqf06fSsQNYpjzYZ/KjwpSZ00F5WbA=="],
 
     "bl": ["bl@4.1.0", "", { "dependencies": { "buffer": "^5.5.0", "inherits": "^2.0.4", "readable-stream": "^3.4.0" } }, "sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w=="],
 

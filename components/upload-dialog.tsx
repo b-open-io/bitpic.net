@@ -2,6 +2,7 @@
 
 import { sendBsv, signBsm } from "@1sat/actions";
 import { Utils } from "@bsv/sdk";
+import { BlockchainImage } from "bitcoin-image/react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ImageCropper } from "@/components/image-cropper";
@@ -17,14 +18,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
-import type {
-  BitPicRefTransactionData,
-  BitPicTransactionData,
-} from "@/lib/transaction-builder";
 import {
-  buildBitPicOpReturn,
-  buildBitPicRefOpReturn,
-  getOrdfsUrl,
+  buildBitPicRefScript,
+  buildBitPicScript,
+  imageToBytes,
+  ordUri,
+  sha256Hex,
   validateImage,
 } from "@/lib/transaction-builder";
 import type { Ordinal } from "@/lib/use-wallet";
@@ -54,6 +53,9 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
   const [selectedOrdinal, setSelectedOrdinal] = useState<Ordinal | null>(null);
+  // Reference URI (ord:// or b://) when avatar points at existing on-chain
+  // content (a wallet ordinal or the BAP profile image) instead of an upload.
+  const [referenceUri, setReferenceUri] = useState<string | null>(null);
   const [paymail, setPaymail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -161,37 +163,14 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleUseProfileImage = async () => {
-    if (!socialProfile?.avatar) return;
-    setIsLoading(true);
-    try {
-      const response = await fetch(socialProfile.avatar);
-      if (!response.ok) throw new Error("Failed to fetch profile image");
-
-      const blob = await response.blob();
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        const validation = validateImage(result);
-
-        if (validation.valid) {
-          setSelectedImage(result);
-          setStep("crop");
-        } else {
-          setError(validation.error || "Invalid image format");
-        }
-        setIsLoading(false);
-      };
-      reader.onerror = () => {
-        setError("Failed to load profile image");
-        setIsLoading(false);
-      };
-      reader.readAsDataURL(blob);
-    } catch (err) {
-      console.error("Failed to load profile image:", err);
-      setError("Failed to load profile image");
-      setIsLoading(false);
-    }
+  // Reference the wallet's on-chain BAP profile image directly (no re-upload).
+  const handleUseProfileImage = () => {
+    if (!socialProfile?.imageOutpoint) return;
+    setReferenceUri(ordUri(socialProfile.imageOutpoint));
+    setSelectedOrdinal(null);
+    setCroppedImage(null);
+    setError(null);
+    setStep("confirm");
   };
 
   const handleCropComplete = useCallback((cropped: string) => {
@@ -207,6 +186,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
   const handleSelectOrdinal = (ordinal: Ordinal) => {
     setSelectedOrdinal(ordinal);
+    setReferenceUri(ordUri(ordinal.origin));
     setStep("confirm");
   };
 
@@ -226,6 +206,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   const handleTabChange = async (value: string) => {
     setSourceMode(value as SourceMode);
     setSelectedOrdinal(null);
+    setReferenceUri(null);
     setSelectedImage(null);
     setCroppedImage(null);
     setError(null);
@@ -238,8 +219,9 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   };
 
   const handleBack = () => {
-    if (sourceMode === "onchain") {
+    if (sourceMode === "onchain" || referenceUri) {
       setSelectedOrdinal(null);
+      setReferenceUri(null);
       setStep("select");
     } else {
       setStep("crop");
@@ -253,11 +235,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
       return;
     }
 
-    if (sourceMode === "upload" && !croppedImage) {
-      setError("Missing cropped image");
-      return;
-    }
-    if (sourceMode === "onchain" && !selectedOrdinal) {
+    if (!referenceUri && !croppedImage) {
       setError("No image selected");
       return;
     }
@@ -267,90 +245,55 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     setStep("sign");
 
     try {
-      let opReturnData: string[];
+      let script: string;
 
-      if (sourceMode === "onchain" && selectedOrdinal) {
-        const ordinalRef = selectedOrdinal.origin;
-        const signedMessage = await signBsm.execute(ctx, {
-          message: ordinalRef,
+      if (referenceUri) {
+        // Reference an existing on-chain image (wallet ordinal or profile pic).
+        // Sign the URI string; the indexer verifies the sig over it.
+        const signed = await signBsm.execute(ctx, {
+          message: referenceUri,
           encoding: "utf8",
         });
-
-        if (
-          signedMessage.error ||
-          !signedMessage.sig ||
-          !signedMessage.pubKey
-        ) {
-          throw new Error(signedMessage.error || "Failed to sign message");
+        if (signed.error || !signed.sig || !signed.pubKey) {
+          throw new Error(signed.error || "Failed to sign message");
         }
-
-        const txData: BitPicRefTransactionData = {
+        // Embed signBsm's pubkey (its message-signing key, distinct from the
+        // identity key) so the backend's sig recovery matches.
+        script = buildBitPicRefScript({
           paymail,
-          // Embed the key that actually produced the signature (signBsm derives
-          // a message-signing key, distinct from the wallet's identity key).
-          // The backend recovers the signer from the signature and requires it
-          // to match this embedded pubkey.
-          publicKey: signedMessage.pubKey,
-          signature: signedMessage.sig,
-          ordinalRef,
-        };
-
-        opReturnData = buildBitPicRefOpReturn(txData);
+          publicKey: signed.pubKey,
+          signature: signed.sig,
+          uri: referenceUri,
+        });
       } else {
         if (!croppedImage) {
           throw new Error("Missing cropped image");
         }
-
         const validation = validateImage(croppedImage);
         if (!validation.valid || !validation.mimeType) {
           throw new Error(validation.error || "Invalid image");
         }
-
-        const base64Data = croppedImage.replace(/^data:image\/\w+;base64,/, "");
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const imageHash = hashArray
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
-
-        const signedMessage = await signBsm.execute(ctx, {
+        const imageBytes = imageToBytes(croppedImage);
+        const imageHash = await sha256Hex(imageBytes);
+        // Sign the hash as hex so both sides operate on the same 32 raw bytes.
+        const signed = await signBsm.execute(ctx, {
           message: imageHash,
-          encoding: "utf8",
+          encoding: "hex",
         });
-
-        if (
-          signedMessage.error ||
-          !signedMessage.sig ||
-          !signedMessage.pubKey
-        ) {
-          throw new Error(signedMessage.error || "Failed to sign message");
+        if (signed.error || !signed.sig || !signed.pubKey) {
+          throw new Error(signed.error || "Failed to sign message");
         }
-
-        const txData: BitPicTransactionData = {
+        script = buildBitPicScript({
           paymail,
-          // Embed the signing key (see note above) so backend verification of
-          // the BSM signature against this pubkey succeeds.
-          publicKey: signedMessage.pubKey,
-          signature: signedMessage.sig,
-          imageData: croppedImage,
+          publicKey: signed.pubKey,
+          signature: signed.sig,
+          imageBytes,
           mimeType: validation.mimeType,
-        };
-
-        opReturnData = buildBitPicOpReturn(txData);
+        });
       }
 
       const result = await sendBsv.execute(ctx, {
-        requests: [
-          {
-            satoshis: 0,
-            data: opReturnData,
-          },
-        ],
+        requests: [{ satoshis: 0, script }],
       });
 
       // The wallet signs + broadcasts. Hand the raw tx to the bitpic backend so
@@ -414,10 +357,26 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
     }
   };
 
-  const previewImage =
-    sourceMode === "onchain" && selectedOrdinal
-      ? getOrdfsUrl(selectedOrdinal.origin)
-      : croppedImage;
+  // Preview a referenced on-chain image via BlockchainImage, or a cropped
+  // upload via a plain data-URL img.
+  const renderPreview = (className: string) => {
+    if (referenceUri) {
+      return (
+        <BlockchainImage
+          src={referenceUri}
+          alt="Avatar preview"
+          className={className}
+        />
+      );
+    }
+    if (croppedImage) {
+      // biome-ignore lint/performance/noImgElement: local data-URL preview
+      return (
+        <img src={croppedImage} alt="Avatar preview" className={className} />
+      );
+    }
+    return null;
+  };
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -446,12 +405,11 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
             </TabsList>
 
             <TabsContent value="upload" className="space-y-4 mt-0">
-              {/* Profile image option */}
-              {socialProfile?.avatar && (
+              {/* Reference the wallet's on-chain profile image (no re-upload) */}
+              {socialProfile?.imageOutpoint && (
                 <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-muted/30">
-                  {/* biome-ignore lint/performance/noImgElement: Dynamic external URL from wallet */}
-                  <img
-                    src={socialProfile.avatar}
+                  <BlockchainImage
+                    src={ordUri(socialProfile.imageOutpoint)}
                     alt="Profile"
                     className="w-12 h-12 rounded-full object-cover border border-border"
                   />
@@ -600,9 +558,8 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                             : "border-border hover:border-muted-foreground"
                         }`}
                       >
-                        {/* biome-ignore lint/performance/noImgElement: Dynamic ORDFS URL */}
-                        <img
-                          src={getOrdfsUrl(ordinal.origin)}
+                        <BlockchainImage
+                          src={ordUri(ordinal.origin)}
                           alt="Selectable avatar"
                           className="w-full h-full object-cover"
                         />
@@ -629,13 +586,8 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           <div className="space-y-6">
             {/* Preview */}
             <div className="flex justify-center">
-              {previewImage && (
-                /* biome-ignore lint/performance/noImgElement: Dynamic preview from crop or ORDFS */
-                <img
-                  src={previewImage}
-                  alt="Avatar preview"
-                  className="w-32 h-32 rounded-full object-cover border-4 border-border"
-                />
+              {renderPreview(
+                "w-32 h-32 rounded-full object-cover border-4 border-border",
               )}
             </div>
 
@@ -727,13 +679,8 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         {step === "success" && txid && (
           <div className="text-center space-y-6 py-4">
             <div className="flex justify-center">
-              {previewImage && (
-                /* biome-ignore lint/performance/noImgElement: Dynamic preview from crop or ORDFS */
-                <img
-                  src={previewImage}
-                  alt="Uploaded avatar"
-                  className="w-32 h-32 rounded-full object-cover border-4 border-primary/20"
-                />
+              {renderPreview(
+                "w-32 h-32 rounded-full object-cover border-4 border-primary/20",
               )}
             </div>
             <div className="space-y-2">
