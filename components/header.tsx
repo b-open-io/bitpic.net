@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { ConnectedWallet } from "@/components/connected-wallet";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/lib/use-wallet";
@@ -18,7 +19,7 @@ const navLinks = [
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { isConnected, address, connect } = useWallet();
+  const { isConnected, connect } = useWallet();
   const pathname = usePathname();
 
   return (
@@ -77,13 +78,9 @@ export function Header() {
             </Button>
           </Link>
           {isConnected ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="font-mono text-xs h-8 bg-muted/50"
-            >
-              {address?.slice(0, 6)}...{address?.slice(-4)}
-            </Button>
+            <div className="flex h-8 items-center rounded-md bg-muted/50 px-2.5 max-w-[180px]">
+              <ConnectedWallet />
+            </div>
           ) : (
             <Button onClick={connect} size="sm" className="h-8 text-xs">
               Connect
@@ -141,9 +138,7 @@ export function Header() {
           </div>
           <div className="pt-3 border-t border-border">
             {isConnected ? (
-              <div className="font-mono text-xs text-muted-foreground">
-                {address}
-              </div>
+              <ConnectedWallet />
             ) : (
               <Button onClick={connect} className="w-full" size="sm">
                 Connect Wallet

@@ -1,9 +1,8 @@
 "use client";
 
-import { useThemeToken } from "@theme-token/sdk/react";
 import { Check, Moon, Palette, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -12,25 +11,23 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useOwnedThemes } from "@/hooks/use-owned-themes";
+import { useThemeTokens } from "@/hooks/use-theme-tokens";
 import { useWallet } from "@/lib/use-wallet";
 import { cn } from "@/lib/utils";
 
 export function ThemeSelector() {
   const { isConnected } = useWallet();
   const { resolvedTheme, setTheme } = useTheme();
-  const { themes, isLoading: loadingMetadata } = useOwnedThemes();
+  const {
+    themes,
+    activeOrigin,
+    activeTheme,
+    loadTheme,
+    resetTheme,
+    isLoading,
+  } = useThemeTokens();
+  const loadingMetadata = isLoading;
   const [mounted, setMounted] = useState(false);
-
-  // The theme SDK filters its input by MAP type/app, which BRC-100 ordinals
-  // don't carry. Feed it the registry-resolved themes so loadTheme/activeOrigin
-  // work without depending on MAP metadata.
-  const themeOrdinals = useMemo(
-    () => themes.map((t) => ({ origin: t.origin, map: { type: "theme" } })),
-    [themes],
-  );
-  const { activeOrigin, activeTheme, loadTheme, resetTheme, isLoading } =
-    useThemeToken(themeOrdinals);
 
   useEffect(() => {
     setMounted(true);

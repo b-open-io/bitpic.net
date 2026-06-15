@@ -2,7 +2,6 @@
 
 import {
   createContext as createOneSatContext,
-  deriveDepositAddresses,
   getOrdinals,
   getProfile,
   type OneSatContext,
@@ -10,6 +9,7 @@ import {
 } from "@1sat/actions";
 import { OneSatServices } from "@1sat/client";
 import { useWallet as useOneSatWallet } from "@1sat/react";
+import { PublicKey, type WalletInterface } from "@bsv/sdk";
 import {
   createContext,
   createElement,
@@ -39,6 +39,9 @@ export interface Ordinal {
   spend: string;
   height: number;
   idx: number;
+  // Raw BRC-100 output tags, kept verbatim for callers that need to match
+  // multi-segment tags like `registry:style:Name@1.0.0` (theme detection).
+  tags: string[];
   map?: Record<string, string>;
   data?: {
     insc?: {
@@ -77,20 +80,36 @@ function toUnderscoreOutpoint(outpoint: string): string {
 // Transform BRC-100 WalletOutputs into our normalized Ordinal shape.
 function normalizeOrdinals(outputs: WalletOutput[]): Ordinal[] {
   return outputs.map((output) => {
-    const tags = parseTags(output.tags);
-    const mimeType = tags.type;
+    const rawTags = output.tags ?? [];
+    const map = parseTags(rawTags);
+    const mimeType = map.type;
     return {
-      origin: toUnderscoreOutpoint(tags.origin || output.outpoint),
+      origin: toUnderscoreOutpoint(map.origin || output.outpoint),
       outpoint: toUnderscoreOutpoint(output.outpoint),
       satoshis: output.satoshis,
       script: output.lockingScript || "",
       spend: "",
       height: 0,
       idx: 0,
-      map: tags,
+      tags: rawTags,
+      map,
       data: mimeType ? { insc: { file: { type: mimeType } } } : undefined,
     };
   });
+}
+
+// Derive a wallet-controlled address (bsv payment / ord) under the wallet
+// protocol. Matches the @1sat reference wallet-actions derivation.
+async function deriveAddress(
+  wallet: WalletInterface,
+  keyID: "bsv" | "ord",
+): Promise<string> {
+  const { publicKey } = await wallet.getPublicKey({
+    protocolID: [2, "wallet"],
+    keyID,
+    counterparty: "self",
+  });
+  return PublicKey.fromString(publicKey).toAddress();
 }
 
 // Convert a profile image reference (e.g. "1sat://<outpoint>") to a fetchable URL.
@@ -163,40 +182,49 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
 
   // Hydrate derived account data (addresses, profile, ordinals) on connect.
   const hydrate = useCallback(async () => {
-    if (!ctx) return;
+    if (!ctx || !wallet) return;
 
-    const [addrResult, profileResult, ordinalsResult] =
+    const [bsvResult, ordResult, profileResult, ordinalsResult] =
       await Promise.allSettled([
-        deriveDepositAddresses.execute(ctx, { startIndex: 0, count: 1 }),
+        deriveAddress(wallet, "bsv"),
+        deriveAddress(wallet, "ord"),
         getProfile.execute(ctx, {}),
         getOrdinals.execute(ctx, {}),
       ]);
 
-    if (addrResult.status === "fulfilled") {
-      const deposit = addrResult.value.derivations?.[0]?.address ?? null;
-      // 1Sat wallets receive BSV and ordinals at the same deposit address.
-      setAddress(deposit);
-      setOrdAddress(deposit);
-      setIdentityAddress(deposit);
+    if (bsvResult.status === "fulfilled") setAddress(bsvResult.value);
+    if (ordResult.status === "fulfilled") setOrdAddress(ordResult.value);
+
+    // Identity address is derived from the identity public key.
+    if (identityKey) {
+      try {
+        setIdentityAddress(PublicKey.fromString(identityKey).toAddress());
+      } catch {
+        setIdentityAddress(null);
+      }
     }
 
     if (profileResult.status === "fulfilled" && !profileResult.value.error) {
-      const profile = profileResult.value.profile;
-      if (profile) {
-        setSocialProfile({
-          displayName:
-            typeof profile.name === "string" ? profile.name : undefined,
-          avatar: resolveProfileImage(
-            typeof profile.image === "string" ? profile.image : undefined,
-          ),
-        });
-      }
+      // BAP profiles use a schema.org Person shape: { name, alternateName, image }.
+      const profile = profileResult.value.profile as
+        | Record<string, unknown>
+        | undefined;
+      const displayName =
+        typeof profile?.name === "string"
+          ? profile.name
+          : typeof profile?.alternateName === "string"
+            ? profile.alternateName
+            : undefined;
+      const avatar = resolveProfileImage(
+        typeof profile?.image === "string" ? profile.image : undefined,
+      );
+      setSocialProfile(displayName || avatar ? { displayName, avatar } : null);
     }
 
     if (ordinalsResult.status === "fulfilled") {
       setOrdinals(normalizeOrdinals(ordinalsResult.value.outputs || []));
     }
-  }, [ctx]);
+  }, [ctx, wallet, identityKey]);
 
   useEffect(() => {
     if (ctx) {

@@ -1,8 +1,6 @@
 "use client";
 
-import { useThemeToken } from "@theme-token/sdk/react";
 import { Palette } from "lucide-react";
-import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,19 +10,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useOwnedThemes } from "@/hooks/use-owned-themes";
+import { useThemeTokens } from "@/hooks/use-theme-tokens";
 import { useWallet } from "@/lib/use-wallet";
 import { cn } from "@/lib/utils";
 
 export function ThemePicker() {
   const { isConnected } = useWallet();
-  const { themes } = useOwnedThemes();
-  const themeOrdinals = useMemo(
-    () => themes.map((t) => ({ origin: t.origin, map: { type: "theme" } })),
-    [themes],
-  );
-  const { activeOrigin, loadTheme, resetTheme, isLoading } =
-    useThemeToken(themeOrdinals);
+  const { themes, activeOrigin, loadTheme, resetTheme, isLoading } =
+    useThemeTokens();
 
   // Don't show if not connected or no theme tokens
   if (!isConnected || themes.length === 0) {

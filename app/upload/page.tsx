@@ -1,19 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { ConnectedWallet } from "@/components/connected-wallet";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadDialog } from "@/components/upload-dialog";
 import { useWallet } from "@/lib/use-wallet";
 
 export default function UploadPage() {
   const router = useRouter();
-  const { isConnected, address } = useWallet();
+  const { isConnected } = useWallet();
 
   const handleSuccess = (txid: string) => {
     setTimeout(() => {
@@ -36,15 +31,13 @@ export default function UploadPage() {
         </p>
       </div>
 
-      {isConnected && address && (
+      {isConnected && (
         <Card className="mb-6 border-primary/20 bg-primary/5">
           <CardHeader className="py-4">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
               Connected Wallet
             </CardTitle>
-            <CardDescription className="font-mono text-xs text-foreground/80">
-              {address}
-            </CardDescription>
+            <ConnectedWallet avatarSize={28} className="mt-1" />
           </CardHeader>
         </Card>
       )}

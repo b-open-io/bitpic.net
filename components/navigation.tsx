@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { ConnectedWallet } from "@/components/connected-wallet";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/lib/use-wallet";
 
 export function Navigation() {
-  const { isConnected, address, connect, disconnect } = useWallet();
+  const { isConnected, connect, disconnect } = useWallet();
 
   return (
     <nav className="border-b border-border bg-background">
@@ -40,10 +41,8 @@ export function Navigation() {
           <div className="flex items-center gap-4">
             {isConnected ? (
               <>
-                <div className="hidden sm:block text-sm text-muted-foreground">
-                  <span className="font-mono">
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
-                  </span>
+                <div className="hidden sm:block max-w-[180px]">
+                  <ConnectedWallet />
                 </div>
                 <Button variant="outline" size="sm" onClick={disconnect}>
                   Disconnect
