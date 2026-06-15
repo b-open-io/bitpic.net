@@ -2,6 +2,7 @@
 
 import { useThemeToken } from "@theme-token/sdk/react";
 import { Palette } from "lucide-react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,16 +12,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useOwnedThemes } from "@/hooks/use-owned-themes";
 import { useWallet } from "@/lib/use-wallet";
 import { cn } from "@/lib/utils";
 
 export function ThemePicker() {
-  const { ordinals, isConnected } = useWallet();
-  const { themeTokens, activeOrigin, loadTheme, resetTheme, isLoading } =
-    useThemeToken(ordinals);
+  const { isConnected } = useWallet();
+  const { themes } = useOwnedThemes();
+  const themeOrdinals = useMemo(
+    () => themes.map((t) => ({ origin: t.origin, map: { type: "theme" } })),
+    [themes],
+  );
+  const { activeOrigin, loadTheme, resetTheme, isLoading } =
+    useThemeToken(themeOrdinals);
 
   // Don't show if not connected or no theme tokens
-  if (!isConnected || themeTokens.length === 0) {
+  if (!isConnected || themes.length === 0) {
     return null;
   }
 
@@ -40,19 +47,19 @@ export function ThemePicker() {
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="text-xs">Theme Tokens</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {themeTokens.map((token) => (
+        {themes.map((theme) => (
           <DropdownMenuItem
-            key={token.origin}
-            onClick={() => loadTheme(token.origin)}
+            key={theme.origin}
+            onClick={() => loadTheme(theme.origin)}
             className={cn(
-              "font-mono text-xs cursor-pointer",
-              token.origin === activeOrigin && "bg-primary/10 text-primary",
+              "text-xs cursor-pointer",
+              theme.origin === activeOrigin && "bg-primary/10 text-primary",
             )}
           >
-            {token.origin === activeOrigin && (
+            {theme.origin === activeOrigin && (
               <span className="mr-1.5">&#10003;</span>
             )}
-            {token.origin.slice(0, 8)}...
+            <span className="truncate">{theme.name}</span>
           </DropdownMenuItem>
         ))}
         {activeOrigin && (

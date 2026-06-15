@@ -1,10 +1,9 @@
 "use client";
 
-import { fetchThemeByOrigin } from "@theme-token/sdk";
 import { useThemeToken } from "@theme-token/sdk/react";
 import { Check, Moon, Palette, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -13,74 +12,31 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useOwnedThemes } from "@/hooks/use-owned-themes";
 import { useWallet } from "@/lib/use-wallet";
 import { cn } from "@/lib/utils";
 
-interface ThemeMetadata {
-  origin: string;
-  name: string;
-  author?: string;
-}
-
 export function ThemeSelector() {
-  const { ordinals, isConnected } = useWallet();
+  const { isConnected } = useWallet();
   const { resolvedTheme, setTheme } = useTheme();
-  const { activeOrigin, activeTheme, loadTheme, resetTheme, isLoading } =
-    useThemeToken(ordinals);
+  const { themes, isLoading: loadingMetadata } = useOwnedThemes();
   const [mounted, setMounted] = useState(false);
 
-  // Filter ordinals for type === "theme" (not app === "ThemeToken")
-  const themeTokens = useMemo(
-    () => ordinals.filter((o) => o.map?.type === "theme"),
-    [ordinals],
+  // The theme SDK filters its input by MAP type/app, which BRC-100 ordinals
+  // don't carry. Feed it the registry-resolved themes so loadTheme/activeOrigin
+  // work without depending on MAP metadata.
+  const themeOrdinals = useMemo(
+    () => themes.map((t) => ({ origin: t.origin, map: { type: "theme" } })),
+    [themes],
   );
-
-  const [themesMetadata, setThemesMetadata] = useState<ThemeMetadata[]>([]);
-  const [loadingMetadata, setLoadingMetadata] = useState(false);
+  const { activeOrigin, activeTheme, loadTheme, resetTheme, isLoading } =
+    useThemeToken(themeOrdinals);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Fetch metadata for all theme tokens
-  const fetchMetadata = useCallback(async () => {
-    if (themeTokens.length === 0) return;
-
-    setLoadingMetadata(true);
-    const metadata: ThemeMetadata[] = [];
-
-    for (const token of themeTokens) {
-      try {
-        const published = await fetchThemeByOrigin(token.origin);
-        if (published) {
-          metadata.push({
-            origin: token.origin,
-            name: published.theme.name,
-            author: published.theme.author,
-          });
-        } else {
-          metadata.push({
-            origin: token.origin,
-            name: `Theme ${token.origin.slice(0, 6)}...`,
-          });
-        }
-      } catch {
-        metadata.push({
-          origin: token.origin,
-          name: `Theme ${token.origin.slice(0, 6)}...`,
-        });
-      }
-    }
-
-    setThemesMetadata(metadata);
-    setLoadingMetadata(false);
-  }, [themeTokens]);
-
-  useEffect(() => {
-    fetchMetadata();
-  }, [fetchMetadata]);
-
-  const hasThemeTokens = isConnected && themeTokens.length > 0;
+  const hasThemeTokens = isConnected && themes.length > 0;
   const effectiveTheme = mounted ? resolvedTheme : undefined;
 
   return (
@@ -145,9 +101,9 @@ export function ThemeSelector() {
                 ))}
               </div>
             ) : (
-              <ScrollArea className={themesMetadata.length > 4 ? "h-40" : ""}>
+              <ScrollArea className={themes.length > 4 ? "h-40" : ""}>
                 <div className="space-y-1">
-                  {themesMetadata.map((theme) => (
+                  {themes.map((theme) => (
                     <button
                       key={theme.origin}
                       type="button"
@@ -211,7 +167,7 @@ export function ThemeSelector() {
         )}
 
         {/* Theme token promo - only show if connected with no tokens */}
-        {isConnected && themeTokens.length === 0 && (
+        {isConnected && themes.length === 0 && (
           <div className="p-3 border-t border-border">
             <a
               href="https://themetoken.dev"

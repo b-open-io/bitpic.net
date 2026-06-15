@@ -65,14 +65,23 @@ function parseTags(tags?: string[]): Record<string, string> {
   return map;
 }
 
+// BRC-100 uses txid.vout outpoints; ordfs, the theme registry, and the
+// BitPic protocol all expect txid_vout. Normalize to the underscore form.
+function toUnderscoreOutpoint(outpoint: string): string {
+  const dot = outpoint.lastIndexOf(".");
+  return dot > 0
+    ? `${outpoint.slice(0, dot)}_${outpoint.slice(dot + 1)}`
+    : outpoint;
+}
+
 // Transform BRC-100 WalletOutputs into our normalized Ordinal shape.
 function normalizeOrdinals(outputs: WalletOutput[]): Ordinal[] {
   return outputs.map((output) => {
     const tags = parseTags(output.tags);
     const mimeType = tags.type;
     return {
-      origin: tags.origin || output.outpoint,
-      outpoint: output.outpoint,
+      origin: toUnderscoreOutpoint(tags.origin || output.outpoint),
+      outpoint: toUnderscoreOutpoint(output.outpoint),
       satoshis: output.satoshis,
       script: output.lockingScript || "",
       spend: "",
