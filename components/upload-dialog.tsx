@@ -366,8 +366,8 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
       );
     }
     if (croppedImage) {
-      // biome-ignore lint/performance/noImgElement: local data-URL preview
       return (
+        // biome-ignore lint/performance/noImgElement: croppedImage is a local data: URL; next/image can't optimize data URLs
         <img src={croppedImage} alt="Avatar preview" className={className} />
       );
     }
