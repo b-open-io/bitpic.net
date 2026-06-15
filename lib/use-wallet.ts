@@ -2,6 +2,7 @@
 
 import {
   createContext as createOneSatContext,
+  deriveDepositAddresses,
   getOrdinals,
   getProfile,
   type OneSatContext,
@@ -9,7 +10,7 @@ import {
 } from "@1sat/actions";
 import { OneSatServices } from "@1sat/client";
 import { useWallet as useOneSatWallet } from "@1sat/react";
-import { PublicKey, type WalletInterface } from "@bsv/sdk";
+import { PublicKey } from "@bsv/sdk";
 import {
   createContext,
   createElement,
@@ -99,20 +100,6 @@ function normalizeOrdinals(outputs: WalletOutput[]): Ordinal[] {
   });
 }
 
-// Derive a wallet-controlled address (bsv payment / ord) under the wallet
-// protocol. Matches the @1sat reference wallet-actions derivation.
-async function deriveAddress(
-  wallet: WalletInterface,
-  keyID: "bsv" | "ord",
-): Promise<string> {
-  const { publicKey } = await wallet.getPublicKey({
-    protocolID: [2, "wallet"],
-    keyID,
-    counterparty: "self",
-  });
-  return PublicKey.fromString(publicKey).toAddress();
-}
-
 // Convert a profile image reference (e.g. "1sat://<outpoint>") to a fetchable URL.
 function resolveProfileImage(image?: string): string | undefined {
   if (!image) return undefined;
@@ -187,12 +174,11 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
 
   // Hydrate derived account data (addresses, profile, ordinals) on connect.
   const hydrate = useCallback(async () => {
-    if (!ctx || !wallet) return;
+    if (!ctx) return;
 
-    const [bsvResult, ordResult, profileResult, ordinalsResult, paymailResult] =
+    const [depositResult, profileResult, ordinalsResult, paymailResult] =
       await Promise.allSettled([
-        deriveAddress(wallet, "bsv"),
-        deriveAddress(wallet, "ord"),
+        deriveDepositAddresses.execute(ctx, { startIndex: 0, count: 1 }),
         getProfile.execute(ctx, {}),
         getOrdinals.execute(ctx, {}),
         identityKey
@@ -200,8 +186,13 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
           : Promise.resolve(null),
       ]);
 
-    if (bsvResult.status === "fulfilled") setAddress(bsvResult.value);
-    if (ordResult.status === "fulfilled") setOrdAddress(ordResult.value);
+    if (depositResult.status === "fulfilled") {
+      // 1Sat wallets receive BSV, ordinals, and tokens at the same P1SAT
+      // deposit address (primary = index 0) — the address the wallet shows.
+      const deposit = depositResult.value.derivations?.[0]?.address ?? null;
+      setAddress(deposit);
+      setOrdAddress(deposit);
+    }
 
     if (paymailResult.status === "fulfilled" && paymailResult.value?.found) {
       setPaymail(paymailResult.value.paymail ?? null);
@@ -236,7 +227,7 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
     if (ordinalsResult.status === "fulfilled") {
       setOrdinals(normalizeOrdinals(ordinalsResult.value.outputs || []));
     }
-  }, [ctx, wallet, identityKey]);
+  }, [ctx, identityKey]);
 
   useEffect(() => {
     if (ctx) {

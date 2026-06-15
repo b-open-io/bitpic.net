@@ -30,8 +30,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const { isConnected, connect, address, pubKey, ordAddress, identityAddress } =
-    useWallet();
+  const { isConnected, connect, address, pubKey } = useWallet();
 
   const resetState = () => {
     setStep("handle");
@@ -100,7 +99,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   };
 
   const registerPaymail = async () => {
-    if (!address || !pubKey || !ordAddress) {
+    if (!address || !pubKey) {
       setHandleError("Wallet not properly connected. Please reconnect.");
       return;
     }
@@ -112,8 +111,9 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
       const request: RegisterPaymailRequest = {
         handle: handle.toLowerCase(),
         identityPubkey: pubKey,
+        // 1Sat wallets receive BSV and ordinals at the same deposit address.
         paymentAddress: address,
-        ordAddress: ordAddress,
+        ordAddress: address,
       };
 
       const result = await api.registerPaymail(request);
@@ -218,15 +218,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                   <>
                     <div className="border-t border-border/40 pt-3">
                       <p className="text-xs text-muted-foreground">
-                        Identity address (for signing)
-                      </p>
-                      <p className="font-mono text-xs text-foreground break-all">
-                        {identityAddress}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        BSV payment address
+                        Receive address (BSV &amp; ordinals)
                       </p>
                       <p className="font-mono text-xs text-foreground break-all">
                         {address}
@@ -234,10 +226,10 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">
-                        Ordinals receive address
+                        Identity key
                       </p>
                       <p className="font-mono text-xs text-foreground break-all">
-                        {ordAddress}
+                        {pubKey}
                       </p>
                     </div>
                   </>
