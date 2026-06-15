@@ -4,28 +4,23 @@ import { Wallet } from "lucide-react";
 import { useWallet } from "@/lib/use-wallet";
 import { cn } from "@/lib/utils";
 
-function shortKey(key: string): string {
-  return key.length > 12 ? `${key.slice(0, 6)}…${key.slice(-4)}` : key;
-}
-
 interface ConnectedWalletProps {
   className?: string;
   avatarSize?: number;
 }
 
 /**
- * Connected-wallet indicator backed by the wallet's BAP profile.
- * Shows the profile avatar + display name when published, otherwise a generic
- * wallet glyph and a shortened identity key. Never shows a receive address.
+ * Connected-wallet indicator backed by the wallet's identity.
+ * Prefers the BAP profile display name, then the registered BitPic paymail,
+ * then a neutral "Connected" label. Never shows a raw pubkey or address.
  */
 export function ConnectedWallet({
   className,
   avatarSize = 20,
 }: ConnectedWalletProps) {
-  const { socialProfile, pubKey } = useWallet();
+  const { socialProfile, paymail } = useWallet();
 
-  const label =
-    socialProfile?.displayName || (pubKey ? shortKey(pubKey) : "Connected");
+  const label = socialProfile?.displayName || paymail || "Connected";
   const avatar = socialProfile?.avatar;
 
   return (

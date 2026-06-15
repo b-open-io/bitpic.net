@@ -1,14 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ConnectedWallet } from "@/components/connected-wallet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadDialog } from "@/components/upload-dialog";
-import { useWallet } from "@/lib/use-wallet";
 
 export default function UploadPage() {
   const router = useRouter();
-  const { isConnected } = useWallet();
 
   const handleSuccess = (txid: string) => {
     setTimeout(() => {
@@ -30,17 +27,6 @@ export default function UploadPage() {
           Store your avatar permanently on the Bitcoin blockchain.
         </p>
       </div>
-
-      {isConnected && (
-        <Card className="mb-6 border-primary/20 bg-primary/5">
-          <CardHeader className="py-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Connected Wallet
-            </CardTitle>
-            <ConnectedWallet avatarSize={28} className="mt-1" />
-          </CardHeader>
-        </Card>
-      )}
 
       <UploadDialog onSuccess={handleSuccess} onClose={handleClose} />
 

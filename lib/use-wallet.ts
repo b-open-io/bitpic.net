@@ -20,6 +20,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { api } from "./api";
 
 // Single shared services instance for backend lookups (ORDFS, overlay, etc.)
 const services = new OneSatServices("main");
@@ -129,6 +130,8 @@ export interface WalletState {
   ordAddress: string | null;
   identityAddress: string | null;
   socialProfile: SocialProfile | null;
+  // The BitPic paymail registered to this wallet's identity key, if any.
+  paymail: string | null;
   ordinals: Ordinal[];
   connect: () => Promise<string | undefined>;
   disconnect: () => void;
@@ -152,6 +155,7 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
   const [socialProfile, setSocialProfile] = useState<SocialProfile | null>(
     null,
   );
+  const [paymail, setPaymail] = useState<string | null>(null);
   const [ordinals, setOrdinals] = useState<Ordinal[]>([]);
 
   const isConnected = status === "connected";
@@ -167,6 +171,7 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
     setOrdAddress(null);
     setIdentityAddress(null);
     setSocialProfile(null);
+    setPaymail(null);
     setOrdinals([]);
   }, []);
 
@@ -184,16 +189,23 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
   const hydrate = useCallback(async () => {
     if (!ctx || !wallet) return;
 
-    const [bsvResult, ordResult, profileResult, ordinalsResult] =
+    const [bsvResult, ordResult, profileResult, ordinalsResult, paymailResult] =
       await Promise.allSettled([
         deriveAddress(wallet, "bsv"),
         deriveAddress(wallet, "ord"),
         getProfile.execute(ctx, {}),
         getOrdinals.execute(ctx, {}),
+        identityKey
+          ? api.lookupPaymailByPubkey(identityKey)
+          : Promise.resolve(null),
       ]);
 
     if (bsvResult.status === "fulfilled") setAddress(bsvResult.value);
     if (ordResult.status === "fulfilled") setOrdAddress(ordResult.value);
+
+    if (paymailResult.status === "fulfilled" && paymailResult.value?.found) {
+      setPaymail(paymailResult.value.paymail ?? null);
+    }
 
     // Identity address is derived from the identity public key.
     if (identityKey) {
@@ -258,6 +270,7 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
       ordAddress,
       identityAddress,
       socialProfile,
+      paymail,
       ordinals,
       connect,
       disconnect,
@@ -271,6 +284,7 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
       ordAddress,
       identityAddress,
       socialProfile,
+      paymail,
       ordinals,
       connect,
       disconnect,
