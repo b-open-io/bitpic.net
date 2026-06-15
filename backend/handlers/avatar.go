@@ -24,6 +24,11 @@ type AvatarHandler struct {
 	cacheTTL time.Duration
 }
 
+// maxImageBytes caps the size of an ordinal we will fetch/serve as an avatar.
+// Prevents a huge referenced ordinal from exhausting memory/bandwidth or
+// poisoning the image cache.
+const maxImageBytes = 10 << 20 // 10 MiB
+
 // Standard avatar sizes - these are cached
 var allowedSizes = map[int]bool{
 	32:  true,
@@ -128,9 +133,18 @@ func (h *AvatarHandler) Handle(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotFound).SendString("Image not found on ORDFS")
 		}
 
-		imageData, err = io.ReadAll(resp.Body)
+		// Reject oversized content up front when the length is advertised.
+		if resp.ContentLength > maxImageBytes {
+			return h.tooLarge(c, defaultURL)
+		}
+
+		// Read with a hard cap (handles chunked / missing Content-Length).
+		imageData, err = io.ReadAll(io.LimitReader(resp.Body, maxImageBytes+1))
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).SendString("Failed to read image data")
+		}
+		if len(imageData) > maxImageBytes {
+			return h.tooLarge(c, defaultURL)
 		}
 
 		// Cache original
@@ -164,6 +178,15 @@ func (h *AvatarHandler) Handle(c *fiber.Ctx) error {
 	c.Set("X-Content-Type-Options", "nosniff")
 	c.Set("Cache-Control", "public, max-age=2592000") // 30 days
 	return c.Send(imageData)
+}
+
+// tooLarge responds when a referenced ordinal exceeds the size cap: redirect to
+// the default image if provided, otherwise 413.
+func (h *AvatarHandler) tooLarge(c *fiber.Ctx, defaultURL string) error {
+	if defaultURL != "" {
+		return c.Redirect(defaultURL, fiber.StatusTemporaryRedirect)
+	}
+	return c.Status(fiber.StatusRequestEntityTooLarge).SendString("Image too large")
 }
 
 // nearestAllowedSize finds the nearest allowed size

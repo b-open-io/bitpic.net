@@ -38,6 +38,12 @@ const (
 	logInterval      = 10 * time.Second // Log stats every 10 seconds
 	logBlocksEvery   = 1000             // Or every 1000 blocks
 	bitpicStartBlock = 610255           // First BitPic transaction block - never sync before this
+
+	// Reconciler: independently flip recent pending avatars to confirmed by
+	// checking the chain, so a missed live block-done event (e.g. a restart
+	// during the block) doesn't leave a record stuck in "pending" forever.
+	reconcileInterval  = 60 * time.Second
+	reconcileScanLimit = 200
 )
 
 // NewSubscriber creates a new JungleBus subscriber
@@ -103,8 +109,45 @@ func (s *Subscriber) Start() error {
 
 	log.Println("Subscribed to JungleBus, listening for transactions...")
 
+	// Self-healing confirmation: independent of the live block stream.
+	go s.reconcileLoop()
+
 	// Block forever - the subscription runs in its own goroutine
 	select {}
+}
+
+// reconcileLoop periodically confirms recent pending avatars by checking the
+// chain directly, so the pending -> confirmed transition is not lost when a
+// live block-done event is missed (e.g. the indexer restarted during the block).
+func (s *Subscriber) reconcileLoop() {
+	for {
+		time.Sleep(reconcileInterval)
+		s.reconcilePending()
+	}
+}
+
+func (s *Subscriber) reconcilePending() {
+	paymails, err := s.redis.GetRecentPaymails(reconcileScanLimit)
+	if err != nil {
+		return
+	}
+	ctx := context.Background()
+	for _, paymail := range paymails {
+		data, err := s.redis.GetAvatarData(paymail)
+		if err != nil || data == nil || data.Confirmed {
+			continue
+		}
+		tx, err := s.client.GetTransaction(ctx, data.TxID)
+		if err != nil || tx == nil || tx.BlockHeight == 0 {
+			continue // still unconfirmed (or lookup failed) — try again next cycle
+		}
+		// Confirmed on-chain. Preserve the timestamp so feed ordering is stable.
+		if err := s.redis.SetAvatar(data.Paymail, data.Outpoint, data.TxID, data.Timestamp, true, data.IsRef, data.RefOrigin); err != nil {
+			log.Printf("reconcile: failed to confirm %s: %v", data.Paymail, err)
+			continue
+		}
+		log.Printf("reconcile: confirmed %s @ block %d", data.Paymail, tx.BlockHeight)
+	}
 }
 
 // GetStatus returns the current subscriber status

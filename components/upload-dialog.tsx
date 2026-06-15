@@ -63,6 +63,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   const [loadingOrdinals, setLoadingOrdinals] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoTabRef = useRef(false);
 
   // Filter ordinals to only show images
   const imageOrdinals = ordinals.filter((o) => {
@@ -95,6 +96,16 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
       lookupPaymail();
     }
   }, [isConnected, pubKey, step, lookupPaymail]);
+
+  // Default to the on-chain tab when the wallet already has something to
+  // reference (a profile image or image ordinals); otherwise stay on upload.
+  useEffect(() => {
+    if (autoTabRef.current || !isConnected) return;
+    if (socialProfile?.imageOutpoint || imageOrdinals.length > 0) {
+      autoTabRef.current = true;
+      setSourceMode("onchain");
+    }
+  }, [isConnected, socialProfile?.imageOutpoint, imageOrdinals.length]);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -330,7 +341,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
       case "crop":
         return "Crop Avatar";
       case "confirm":
-        return "Confirm Upload";
+        return referenceUri ? "Confirm BitPic" : "Confirm Upload";
       case "sign":
         return "Broadcasting";
       case "success":
@@ -345,7 +356,9 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
       case "crop":
         return "Adjust the crop area for your avatar";
       case "confirm":
-        return "Review and upload to Bitcoin";
+        return referenceUri
+          ? "Review and link your on-chain image"
+          : "Review and upload to Bitcoin";
       case "sign":
         return "Signing and broadcasting to Bitcoin...";
       case "success":
@@ -401,33 +414,6 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
             </TabsList>
 
             <TabsContent value="upload" className="space-y-4 mt-0">
-              {/* Reference the wallet's on-chain profile image (no re-upload) */}
-              {socialProfile?.imageOutpoint && (
-                <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-muted/30">
-                  <BlockchainImage
-                    src={ordUri(socialProfile.imageOutpoint)}
-                    alt="Profile"
-                    className="w-12 h-12 rounded-full object-cover border border-border"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {socialProfile.displayName || "Profile Image"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Use your current wallet profile
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleUseProfileImage}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Loading..." : "Use"}
-                  </Button>
-                </div>
-              )}
-
               {/* Drop zone - div required for drag-and-drop */}
               {/* biome-ignore lint/a11y/useSemanticElements: div needed for drag-and-drop target */}
               <div
@@ -507,62 +493,95 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                     {isLoading ? "Connecting..." : "Connect Wallet"}
                   </Button>
                 </div>
-              ) : loadingOrdinals ? (
-                <div className="h-[280px]">
-                  <div className="grid grid-cols-4 gap-3">
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                      <Skeleton key={i} className="aspect-square rounded-lg" />
-                    ))}
-                  </div>
-                </div>
-              ) : imageOrdinals.length === 0 ? (
-                <div className="h-[280px] flex flex-col items-center justify-center text-center p-4 border border-dashed border-border rounded-lg">
-                  <div className="bg-muted p-4 rounded-full mb-4">
-                    <svg
-                      className="w-8 h-8 text-muted-foreground"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <title>No images</title>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    No images found in your wallet
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Try uploading an image instead
-                  </p>
-                </div>
               ) : (
-                <ScrollArea className="h-[280px]">
-                  <div className="grid grid-cols-4 gap-3 pr-4">
-                    {imageOrdinals.map((ordinal) => (
-                      <button
-                        key={ordinal.origin}
-                        type="button"
-                        onClick={() => handleSelectOrdinal(ordinal)}
-                        className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                          selectedOrdinal?.origin === ordinal.origin
-                            ? "border-primary ring-2 ring-primary/20"
-                            : "border-border hover:border-muted-foreground"
-                        }`}
-                      >
-                        <BlockchainImage
-                          src={ordUri(ordinal.origin)}
-                          alt="Selectable avatar"
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </ScrollArea>
+                <div className="space-y-3">
+                  {socialProfile?.imageOutpoint && (
+                    <button
+                      type="button"
+                      onClick={handleUseProfileImage}
+                      className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left transition-all ${
+                        referenceUri === ordUri(socialProfile.imageOutpoint)
+                          ? "border-primary ring-2 ring-primary/20"
+                          : "border-border hover:border-muted-foreground"
+                      }`}
+                    >
+                      <BlockchainImage
+                        src={ordUri(socialProfile.imageOutpoint)}
+                        alt="Profile"
+                        className="h-12 w-12 rounded-full object-cover"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          Use your profile picture
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {socialProfile.displayName ||
+                            "Your Yours wallet avatar"}
+                        </p>
+                      </div>
+                    </button>
+                  )}
+                  {loadingOrdinals ? (
+                    <div className="h-[280px]">
+                      <div className="grid grid-cols-4 gap-3">
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                          <Skeleton
+                            key={i}
+                            className="aspect-square rounded-lg"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : imageOrdinals.length === 0 ? (
+                    <div className="h-[280px] flex flex-col items-center justify-center text-center p-4 border border-dashed border-border rounded-lg">
+                      <div className="bg-muted p-4 rounded-full mb-4">
+                        <svg
+                          className="w-8 h-8 text-muted-foreground"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <title>No images</title>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        No images found in your wallet
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Try uploading an image instead
+                      </p>
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[280px]">
+                      <div className="grid grid-cols-4 gap-3 pr-4">
+                        {imageOrdinals.map((ordinal) => (
+                          <button
+                            key={ordinal.origin}
+                            type="button"
+                            onClick={() => handleSelectOrdinal(ordinal)}
+                            className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                              selectedOrdinal?.origin === ordinal.origin
+                                ? "border-primary ring-2 ring-primary/20"
+                                : "border-border hover:border-muted-foreground"
+                            }`}
+                          >
+                            <BlockchainImage
+                              src={ordUri(ordinal.origin)}
+                              alt="Selectable avatar"
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </div>
               )}
             </TabsContent>
           </Tabs>
@@ -625,9 +644,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                     disabled={isLoading}
                     className="flex-1"
                   >
-                    {sourceMode === "onchain"
-                      ? "Link to Bitcoin"
-                      : "Upload to Bitcoin"}
+                    {referenceUri ? "Link BitPic" : "Upload to Bitcoin"}
                   </Button>
                 </div>
               </div>

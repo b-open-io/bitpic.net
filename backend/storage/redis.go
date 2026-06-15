@@ -150,6 +150,11 @@ func (r *RedisClient) GetAvatarData(paymail string) (*AvatarData, error) {
 	return &data, nil
 }
 
+// GetRecentPaymails returns the most recent paymails from the feed (newest first).
+func (r *RedisClient) GetRecentPaymails(limit int64) ([]string, error) {
+	return r.client.ZRevRange(r.ctx, "bitpic:feed", 0, limit-1).Result()
+}
+
 // GetFeed retrieves paginated feed items
 func (r *RedisClient) GetFeed(offset, limit int64, ordfsBaseURL string) ([]FeedItem, int64, error) {
 	feedKey := "bitpic:feed"
