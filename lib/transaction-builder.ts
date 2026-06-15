@@ -77,20 +77,12 @@ export function buildBitPicRefScript(data: BitPicRefTransactionData): string {
   return bitpicScript(bSegment, data.paymail, data.publicKey, data.signature);
 }
 
-/** Normalize an outpoint to txid_vout (underscore) form. */
-export function normalizeOutpoint(outpoint: string): string {
+// Normalize an outpoint to txid_vout (underscore) form.
+function normalizeOutpoint(outpoint: string): string {
   const dot = outpoint.lastIndexOf(".");
   return dot > 0
     ? `${outpoint.slice(0, dot)}_${outpoint.slice(dot + 1)}`
     : outpoint;
-}
-
-/** Validate a txid_vout outpoint. */
-export function isValidOutpoint(outpoint: string): boolean {
-  const parts = outpoint.split("_");
-  if (parts.length !== 2) return false;
-  const [txid, vout] = parts;
-  return /^[a-fA-F0-9]{64}$/.test(txid) && /^\d+$/.test(vout);
 }
 
 /** Build an ord:// reference URI from an ordinal origin/outpoint. */
