@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "About",
+  description:
+    "How BitPic stores Paymail avatars permanently on the Bitcoin blockchain — the protocol, on-chain references, and how to use it.",
+  alternates: { canonical: "/about" },
+};
 
 export default function AboutPage() {
   return (

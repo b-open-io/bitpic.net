@@ -16,8 +16,10 @@ export function AvatarCard({ paymail, imageUrl, timestamp }: AvatarCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Copy the shareable BitPic image URL (the whole point of the service),
+  // not the paymail.
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(paymail);
+    await navigator.clipboard.writeText(`https://bitpic.net/u/${paymail}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -51,6 +53,8 @@ export function AvatarCard({ paymail, imageUrl, timestamp }: AvatarCardProps) {
               <Button
                 size="icon"
                 variant="secondary"
+                title={copied ? "Copied!" : "Copy BitPic image URL"}
+                aria-label="Copy BitPic image URL"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCopy();

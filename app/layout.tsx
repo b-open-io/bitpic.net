@@ -25,11 +25,18 @@ const spectral = Spectral({
 });
 
 export const metadata: Metadata = {
-  title: "bitpic.net - Your avatar on bitcoin, forever",
+  // Resolves relative OG/canonical URLs to absolute (otherwise crawlers see
+  // localhost and the OG image fails to load).
+  metadataBase: new URL("https://bitpic.net"),
+  title: {
+    default: "bitpic.net - Your avatar on bitcoin, forever",
+    template: "%s · bitpic",
+  },
   description:
     "Store your avatar on the Bitcoin blockchain with bitpic. Immutable, permanent, and yours forever.",
-  keywords: ["bitcoin", "avatar", "blockchain", "paymail", "bsv"],
+  keywords: ["bitcoin", "avatar", "blockchain", "paymail", "bsv", "ordinals"],
   authors: [{ name: "bitpic.net" }],
+  alternates: { canonical: "/" },
   icons: {
     icon: "/avatar.png",
     apple: "/apple-touch-icon.png",
@@ -38,6 +45,8 @@ export const metadata: Metadata = {
     title: "bitpic.net - Your avatar on bitcoin, forever",
     description: "Store your avatar on the Bitcoin blockchain with bitpic.",
     type: "website",
+    siteName: "bitpic",
+    url: "/",
     images: ["/og-image.jpg"],
   },
   twitter: {
