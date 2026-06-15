@@ -11,6 +11,7 @@ import {
 import { OneSatServices } from "@1sat/client";
 import { useWallet as useOneSatWallet } from "@1sat/react";
 import { PublicKey } from "@bsv/sdk";
+import { parse } from "bitcoin-image";
 import {
   createContext,
   createElement,
@@ -102,22 +103,22 @@ function normalizeOrdinals(outputs: WalletOutput[]): Ordinal[] {
   });
 }
 
-// Extract a txid_vout outpoint from an on-chain image reference
-// (1sat://, ord://, b://, or a bare outpoint). Returns undefined for http(s).
-function extractImageOutpoint(image?: string): string | undefined {
+// 1sat:// is an ordinal-scheme alias bitcoin-image doesn't recognize; map it to
+// ord:// so its parser/renderer handle it.
+function normalizeImageRef(image?: string): string | undefined {
   if (!image) return undefined;
-  const stripped = image.replace(/^(1sat|ord|b|c):\/\//, "");
-  if (/^https?:\/\//.test(stripped)) return undefined;
-  const normalized = toUnderscoreOutpoint(stripped);
-  return /^[a-fA-F0-9]{64}_\d+$/.test(normalized) ? normalized : undefined;
+  return image.startsWith("1sat://")
+    ? `ord://${image.slice("1sat://".length)}`
+    : image;
 }
 
-// Convert a profile image reference to a fetchable URL.
-function resolveProfileImage(image?: string): string | undefined {
-  if (!image) return undefined;
-  const outpoint = extractImageOutpoint(image);
-  if (outpoint) return `https://ordfs.network/content/${outpoint}`;
-  return image;
+// Extract a txid_vout outpoint from an image reference using bitcoin-image.
+function imageOutpointFrom(ref?: string): string | undefined {
+  if (!ref) return undefined;
+  const parsed = parse(ref);
+  return parsed.isValid && parsed.txid
+    ? `${parsed.txid}_${parsed.vout ?? 0}`
+    : undefined;
 }
 
 export interface WalletState {
@@ -229,12 +230,14 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
           : typeof profile?.alternateName === "string"
             ? profile.alternateName
             : undefined;
-      const rawImage =
-        typeof profile?.image === "string" ? profile.image : undefined;
-      const avatar = resolveProfileImage(rawImage);
-      const imageOutpoint = extractImageOutpoint(rawImage);
+      const imageRef = normalizeImageRef(
+        typeof profile?.image === "string" ? profile.image : undefined,
+      );
+      const imageOutpoint = imageOutpointFrom(imageRef);
       setSocialProfile(
-        displayName || avatar ? { displayName, avatar, imageOutpoint } : null,
+        displayName || imageRef
+          ? { displayName, avatar: imageRef, imageOutpoint }
+          : null,
       );
     }
 

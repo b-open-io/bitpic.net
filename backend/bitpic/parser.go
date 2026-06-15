@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bsv-blockchain/go-script-templates/template/bitcom"
+	"github.com/bitcoin-sv/go-templates/template/bitcom"
 	"github.com/bsv-blockchain/go-sdk/script"
 	"github.com/bsv-blockchain/go-sdk/transaction"
 )

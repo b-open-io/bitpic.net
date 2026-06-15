@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/b-open-io/go-junglebus v0.3.4
-	github.com/bsv-blockchain/go-script-templates v0.1.7
 	github.com/bsv-blockchain/go-sdk v1.2.24
 	github.com/gofiber/fiber/v2 v2.52.0
 	github.com/joho/godotenv v1.5.1
@@ -14,6 +13,7 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
+	github.com/bitcoin-sv/go-templates v0.1.0
 	github.com/centrifugal/centrifuge-go v0.10.11 // indirect
 	github.com/centrifugal/protocol v0.18.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
@@ -42,3 +42,5 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
+
+replace github.com/bitcoin-sv/go-templates => github.com/b-open-io/go-templates v0.0.0-20260302230614-be91c94f1d27

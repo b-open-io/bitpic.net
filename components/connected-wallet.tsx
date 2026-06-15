@@ -1,5 +1,6 @@
 "use client";
 
+import { BlockchainImage } from "bitcoin-image/react";
 import { Wallet } from "lucide-react";
 import { useWallet } from "@/lib/use-wallet";
 import { cn } from "@/lib/utils";
@@ -26,14 +27,9 @@ export function ConnectedWallet({
   return (
     <span className={cn("flex items-center gap-2 min-w-0", className)}>
       {avatar ? (
-        // Profile images come from arbitrary on-chain/ORDFS hosts, so a plain
-        // img avoids next/image remote-pattern constraints.
-        // biome-ignore lint/performance/noImgElement: arbitrary avatar host
-        <img
+        <BlockchainImage
           src={avatar}
           alt={label}
-          width={avatarSize}
-          height={avatarSize}
           style={{ width: avatarSize, height: avatarSize }}
           className="rounded-full object-cover shrink-0"
         />
