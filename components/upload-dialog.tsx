@@ -1,6 +1,7 @@
 "use client";
 
 import { sendBsv, signBsm } from "@1sat/actions";
+import { Utils } from "@bsv/sdk";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ImageCropper } from "@/components/image-cropper";
@@ -352,13 +353,26 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         ],
       });
 
-      if (result.error || !result.txid) {
+      // The wallet signs + broadcasts. Hand the raw tx to the bitpic backend so
+      // it re-broadcasts (idempotent) and indexes the avatar immediately via
+      // parseAndStore, instead of waiting for JungleBus to see it on-chain.
+      let txid = result.txid;
+      if (result.tx) {
+        const indexed = await api.broadcast(Utils.toHex(result.tx));
+        if (indexed.success && indexed.txid) {
+          txid = txid || indexed.txid;
+        } else if (!txid && indexed.error) {
+          throw new Error(indexed.error);
+        }
+      }
+
+      if (!txid) {
         throw new Error(result.error || "Failed to broadcast transaction");
       }
 
-      setTxid(result.txid);
+      setTxid(txid);
       setStep("success");
-      onSuccess?.(result.txid);
+      onSuccess?.(txid);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to sign and broadcast",
