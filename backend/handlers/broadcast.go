@@ -1,50 +1,42 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/b-open-io/bitpic/bitpic"
 	"github.com/b-open-io/bitpic/storage"
+	"github.com/bsv-blockchain/go-sdk/transaction"
 	"github.com/gofiber/fiber/v2"
 )
 
-// BroadcastHandler handles the /api/broadcast endpoint
+// BroadcastHandler handles the /api/broadcast endpoint.
+//
+// The wallet broadcasts the BitPic transaction itself; this endpoint's job is
+// to index it immediately (parse + verify + store) so the avatar appears
+// without waiting for JungleBus to observe it on the network. JungleBus remains
+// the backstop for anything not posted here.
 type BroadcastHandler struct {
 	arcURL string
 	redis  *storage.RedisClient
 }
 
-// ARCResponse represents the response from ARC
-type ARCResponse struct {
-	TxID        string `json:"txid"`
-	BlockHash   string `json:"blockHash,omitempty"`
-	BlockHeight int64  `json:"blockHeight,omitempty"`
-	ExtraInfo   string `json:"extraInfo,omitempty"`
-	Status      int    `json:"status"`
-	Title       string `json:"title,omitempty"`
-	Detail      string `json:"detail,omitempty"`
-}
-
-// BroadcastRequest represents the broadcast request body
+// BroadcastRequest is the request body. RawTx may be a bare transaction or
+// (atomic) BEEF — the wallet's sendBsv returns atomic BEEF.
 type BroadcastRequest struct {
 	RawTx string `json:"rawtx"`
 }
 
-// BroadcastResponse represents the response
+// BroadcastResponse is the response.
 type BroadcastResponse struct {
 	Success bool   `json:"success"`
 	TxID    string `json:"txid,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
 
-// NewBroadcastHandler creates a new broadcast handler
+// NewBroadcastHandler creates a new broadcast handler.
 func NewBroadcastHandler(arcURL string, redis *storage.RedisClient) *BroadcastHandler {
 	return &BroadcastHandler{
 		arcURL: arcURL,
@@ -52,9 +44,8 @@ func NewBroadcastHandler(arcURL string, redis *storage.RedisClient) *BroadcastHa
 	}
 }
 
-// Handle broadcasts a transaction via ARC
+// Handle parses, verifies, and stores a BitPic transaction immediately.
 func (h *BroadcastHandler) Handle(c *fiber.Ctx) error {
-	// Parse request body
 	var req BroadcastRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(BroadcastResponse{
@@ -70,111 +61,53 @@ func (h *BroadcastHandler) Handle(c *fiber.Ctx) error {
 		})
 	}
 
-	// Broadcast to ARC
-	txid, err := h.broadcastToARC(req.RawTx)
+	txBytes, err := extractTxBytes(req.RawTx)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(BroadcastResponse{
+		return c.Status(fiber.StatusBadRequest).JSON(BroadcastResponse{
 			Success: false,
 			Error:   err.Error(),
 		})
 	}
 
-	// Immediately parse and store the transaction (don't wait for JungleBus)
-	go h.parseAndStore(req.RawTx, txid)
-
-	return c.JSON(BroadcastResponse{
-		Success: true,
-		TxID:    txid,
-	})
-}
-
-// parseAndStore parses and stores a BitPic transaction immediately after broadcast
-func (h *BroadcastHandler) parseAndStore(rawTxHex, txid string) {
-	// Decode hex transaction
-	txBytes, err := hex.DecodeString(rawTxHex)
-	if err != nil {
-		log.Printf("Failed to decode transaction %s: %v", txid, err)
-		return
-	}
-
-	// Parse BitPic data
 	data, err := bitpic.ParseTransaction(txBytes)
 	if err != nil {
-		// Not a BitPic transaction or parsing failed
-		log.Printf("Failed to parse BitPic transaction %s: %v", txid, err)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(BroadcastResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
 	}
 
-	// Use current time for unconfirmed transaction
+	// Store immediately as unconfirmed (JungleBus upgrades it to confirmed and
+	// SetAvatar is newest-wins, so re-indexing is safe).
 	timestamp := time.Now().Unix()
-	data.Timestamp = timestamp
-
-	// Store in Redis as unconfirmed
-	if err := h.redis.SetAvatar(data.Paymail, data.Outpoint, txid, timestamp, false, data.IsRef, data.RefOrigin); err != nil {
+	if err := h.redis.SetAvatar(data.Paymail, data.Outpoint, data.TxID, timestamp, false, data.IsRef, data.RefOrigin); err != nil {
 		log.Printf("Failed to store avatar for %s: %v", data.Paymail, err)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(BroadcastResponse{
+			Success: false,
+			Error:   "failed to store avatar",
+		})
 	}
 
 	refInfo := ""
 	if data.IsRef {
 		refInfo = fmt.Sprintf(" (ref -> %s)", data.RefOrigin)
 	}
-	log.Printf("Immediately stored BitPic avatar (unconfirmed): %s -> %s%s", data.Paymail, data.Outpoint, refInfo)
+	log.Printf("Indexed BitPic avatar (unconfirmed): %s -> %s%s", data.Paymail, data.Outpoint, refInfo)
+
+	return c.JSON(BroadcastResponse{Success: true, TxID: data.TxID})
 }
 
-// broadcastToARC broadcasts a transaction to ARC
-func (h *BroadcastHandler) broadcastToARC(rawTx string) (string, error) {
-	url := fmt.Sprintf("%s/v1/tx", h.arcURL)
-
-	// Create request body
-	body := map[string]interface{}{
-		"rawTx": rawTx,
-	}
-
-	jsonBody, err := json.Marshal(body)
+// extractTxBytes returns the raw transaction bytes from either a bare tx hex or
+// (atomic) BEEF hex.
+func extractTxBytes(input string) ([]byte, error) {
+	b, err := hex.DecodeString(input)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("invalid transaction hex: %w", err)
 	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+	// The wallet's sendBsv returns atomic BEEF; extract the subject tx.
+	if tx, err := transaction.NewTransactionFromBEEF(b); err == nil && tx != nil {
+		return tx.Bytes(), nil
 	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to broadcast: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Parse ARC response
-	var arcResp ARCResponse
-	if err := json.Unmarshal(respBody, &arcResp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	// Check for errors
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		if arcResp.Detail != "" {
-			return "", fmt.Errorf("ARC error: %s", arcResp.Detail)
-		}
-		return "", fmt.Errorf("ARC returned status %d", resp.StatusCode)
-	}
-
-	if arcResp.TxID == "" {
-		return "", fmt.Errorf("no txid in response")
-	}
-
-	return arcResp.TxID, nil
+	// Otherwise assume a bare raw transaction.
+	return b, nil
 }

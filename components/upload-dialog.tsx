@@ -296,17 +296,13 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         requests: [{ satoshis: 0, script }],
       });
 
-      // The wallet signs + broadcasts. Hand the raw tx to the bitpic backend so
-      // it re-broadcasts (idempotent) and indexes the avatar immediately via
-      // parseAndStore, instead of waiting for JungleBus to see it on-chain.
+      // The wallet already signed + broadcast. Hand the raw tx to the bitpic
+      // backend for instant indexing. This is best-effort and non-fatal: if it
+      // fails, JungleBus still indexes the tx from the network shortly after.
       let txid = result.txid;
       if (result.tx) {
         const indexed = await api.broadcast(Utils.toHex(result.tx));
-        if (indexed.success && indexed.txid) {
-          txid = txid || indexed.txid;
-        } else if (!txid && indexed.error) {
-          throw new Error(indexed.error);
-        }
+        if (indexed.txid) txid = txid || indexed.txid;
       }
 
       if (!txid) {

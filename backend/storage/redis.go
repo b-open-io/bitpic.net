@@ -124,6 +124,10 @@ func (r *RedisClient) GetAvatar(paymail string) (string, error) {
 		return "", fmt.Errorf("failed to unmarshal avatar data: %w", err)
 	}
 
+	// References resolve to the referenced content, not the BitPic tx output.
+	if data.IsRef && data.RefOrigin != "" {
+		return data.RefOrigin, nil
+	}
 	return data.Outpoint, nil
 }
 
@@ -175,10 +179,16 @@ func (r *RedisClient) GetFeed(offset, limit int64, ordfsBaseURL string) ([]FeedI
 			continue
 		}
 
-		url := fmt.Sprintf("%s/%s", ordfsBaseURL, data.Outpoint)
+		// For references, the image lives at the referenced outpoint, not the
+		// BitPic tx output.
+		displayOutpoint := data.Outpoint
+		if data.IsRef && data.RefOrigin != "" {
+			displayOutpoint = data.RefOrigin
+		}
+		url := fmt.Sprintf("%s/%s", ordfsBaseURL, displayOutpoint)
 		items = append(items, FeedItem{
 			Paymail:   data.Paymail,
-			Outpoint:  data.Outpoint,
+			Outpoint:  displayOutpoint,
 			Timestamp: data.Timestamp,
 			URL:       url,
 			TxID:      data.TxID,
