@@ -10,6 +10,9 @@
     "format": "biome format --write"
   },
   "dependencies": {
+    "@1sat/actions": "^0.0.166",
+    "@1sat/client": "^0.0.38",
+    "@1sat/react": "^0.0.67",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-popover": "^1.1.15",
@@ -29,8 +32,7 @@
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "react-easy-crop": "^5.5.6",
-    "tailwind-merge": "^3.4.0",
-    "yours-wallet-provider": "^3.7.0"
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",

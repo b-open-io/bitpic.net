@@ -1,5 +1,6 @@
 "use client";
 
+import { sendBsv, signBsm } from "@1sat/actions";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ImageCropper } from "@/components/image-cropper";
@@ -38,7 +39,7 @@ interface UploadDialogProps {
 
 export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   const {
-    wallet,
+    ctx,
     isConnected,
     connect,
     pubKey,
@@ -246,7 +247,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
   };
 
   const handleSignAndBroadcast = async () => {
-    if (!wallet || !pubKey || !paymail) {
+    if (!ctx || !pubKey || !paymail) {
       setError("Missing required data");
       return;
     }
@@ -269,13 +270,13 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
 
       if (sourceMode === "onchain" && selectedOrdinal) {
         const ordinalRef = selectedOrdinal.origin;
-        const signedMessage = await wallet.signMessage({
+        const signedMessage = await signBsm.execute(ctx, {
           message: ordinalRef,
           encoding: "utf8",
         });
 
-        if (!signedMessage?.sig) {
-          throw new Error("Failed to sign message");
+        if (signedMessage.error || !signedMessage.sig) {
+          throw new Error(signedMessage.error || "Failed to sign message");
         }
 
         const txData: BitPicRefTransactionData = {
@@ -308,13 +309,13 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
 
-        const signedMessage = await wallet.signMessage({
+        const signedMessage = await signBsm.execute(ctx, {
           message: imageHash,
           encoding: "utf8",
         });
 
-        if (!signedMessage?.sig) {
-          throw new Error("Failed to sign message");
+        if (signedMessage.error || !signedMessage.sig) {
+          throw new Error(signedMessage.error || "Failed to sign message");
         }
 
         const txData: BitPicTransactionData = {
@@ -328,15 +329,17 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
         opReturnData = buildBitPicOpReturn(txData);
       }
 
-      const result = await wallet.sendBsv([
-        {
-          satoshis: 0,
-          data: opReturnData,
-        },
-      ]);
+      const result = await sendBsv.execute(ctx, {
+        requests: [
+          {
+            satoshis: 0,
+            data: opReturnData,
+          },
+        ],
+      });
 
-      if (!result?.txid) {
-        throw new Error("Failed to broadcast transaction");
+      if (result.error || !result.txid) {
+        throw new Error(result.error || "Failed to broadcast transaction");
       }
 
       setTxid(result.txid);

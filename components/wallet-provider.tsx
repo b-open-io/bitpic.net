@@ -1,7 +1,7 @@
 "use client";
 
+import { WalletProvider as OneSatWalletProvider } from "@1sat/react";
 import type { ReactNode } from "react";
-import { YoursProvider } from "yours-wallet-provider";
 import { WalletStateProvider } from "@/lib/use-wallet";
 
 interface WalletProviderProps {
@@ -10,8 +10,8 @@ interface WalletProviderProps {
 
 export function WalletProvider({ children }: WalletProviderProps) {
   return (
-    <YoursProvider>
+    <OneSatWalletProvider autoReconnect>
       <WalletStateProvider>{children}</WalletStateProvider>
-    </YoursProvider>
+    </OneSatWalletProvider>
   );
 }

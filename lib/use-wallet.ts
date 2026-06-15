@@ -1,6 +1,16 @@
 "use client";
 
 import {
+  createContext as createOneSatContext,
+  deriveDepositAddresses,
+  getOrdinals,
+  getProfile,
+  type OneSatContext,
+  type WalletOutput,
+} from "@1sat/actions";
+import { OneSatServices } from "@1sat/client";
+import { useWallet as useOneSatWallet } from "@1sat/react";
+import {
   createContext,
   createElement,
   type ReactNode,
@@ -10,36 +20,17 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useYoursWallet } from "yours-wallet-provider";
+
+// Single shared services instance for backend lookups (ORDFS, overlay, etc.)
+const services = new OneSatServices("main");
 
 export interface SocialProfile {
   displayName?: string;
   avatar?: string;
 }
 
-// Raw ordinal structure from Yours Wallet
-interface RawOrdinal {
-  outpoint: string;
-  satoshis: number;
-  script: string;
-  spend: string;
-  height: number;
-  idx: number;
-  origin?: {
-    outpoint?: string;
-    data?: {
-      map?: Record<string, string>;
-      insc?: {
-        file?: {
-          type?: string;
-          size?: number;
-        };
-      };
-    };
-  };
-}
-
-// Normalized ordinal structure for our app and SDK compatibility
+// Normalized ordinal structure for our app and SDK compatibility.
+// Built from BRC-100 WalletOutput tags (origin, type:<mime>, name, ...).
 export interface Ordinal {
   origin: string;
   outpoint: string;
@@ -59,23 +50,51 @@ export interface Ordinal {
   };
 }
 
-// Transform raw wallet ordinals to normalized format
-function normalizeOrdinals(rawOrdinals: RawOrdinal[]): Ordinal[] {
-  return rawOrdinals.map((raw) => ({
-    origin: raw.origin?.outpoint || raw.outpoint,
-    outpoint: raw.outpoint,
-    satoshis: raw.satoshis,
-    script: raw.script,
-    spend: raw.spend,
-    height: raw.height,
-    idx: raw.idx,
-    map: raw.origin?.data?.map,
-    data: raw.origin?.data ? { insc: raw.origin.data.insc } : undefined,
-  }));
+// Parse BRC-100 output tags ("key:value") into a flat record.
+function parseTags(tags?: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (!tags) return map;
+  for (const tag of tags) {
+    const sep = tag.indexOf(":");
+    if (sep > 0) {
+      map[tag.slice(0, sep)] = tag.slice(sep + 1);
+    } else {
+      map[tag] = "";
+    }
+  }
+  return map;
+}
+
+// Transform BRC-100 WalletOutputs into our normalized Ordinal shape.
+function normalizeOrdinals(outputs: WalletOutput[]): Ordinal[] {
+  return outputs.map((output) => {
+    const tags = parseTags(output.tags);
+    const mimeType = tags.type;
+    return {
+      origin: tags.origin || output.outpoint,
+      outpoint: output.outpoint,
+      satoshis: output.satoshis,
+      script: output.lockingScript || "",
+      spend: "",
+      height: 0,
+      idx: 0,
+      map: tags,
+      data: mimeType ? { insc: { file: { type: mimeType } } } : undefined,
+    };
+  });
+}
+
+// Convert a profile image reference (e.g. "1sat://<outpoint>") to a fetchable URL.
+function resolveProfileImage(image?: string): string | undefined {
+  if (!image) return undefined;
+  if (image.startsWith("1sat://")) {
+    return `https://ordfs.network/content/${image.slice("1sat://".length)}`;
+  }
+  return image;
 }
 
 export interface WalletState {
-  wallet: ReturnType<typeof useYoursWallet> | null;
+  ctx: OneSatContext | null;
   isConnected: boolean;
   address: string | null;
   pubKey: string | null;
@@ -91,10 +110,15 @@ export interface WalletState {
 const WalletContext = createContext<WalletState | null>(null);
 
 export function WalletStateProvider({ children }: { children: ReactNode }) {
-  const wallet = useYoursWallet();
-  const [isConnected, setIsConnected] = useState(false);
+  const {
+    wallet,
+    status,
+    identityKey,
+    connect: connectWallet,
+    disconnect: disconnectWallet,
+  } = useOneSatWallet();
+
   const [address, setAddress] = useState<string | null>(null);
-  const [pubKey, setPubKey] = useState<string | null>(null);
   const [ordAddress, setOrdAddress] = useState<string | null>(null);
   const [identityAddress, setIdentityAddress] = useState<string | null>(null);
   const [socialProfile, setSocialProfile] = useState<SocialProfile | null>(
@@ -102,10 +126,16 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
   );
   const [ordinals, setOrdinals] = useState<Ordinal[]>([]);
 
+  const isConnected = status === "connected";
+
+  // Build the opaque action context once the wallet is connected.
+  const ctx = useMemo<OneSatContext | null>(() => {
+    if (status !== "connected" || !wallet) return null;
+    return createOneSatContext(wallet, { chain: "main", services });
+  }, [wallet, status]);
+
   const resetState = useCallback(() => {
-    setIsConnected(false);
     setAddress(null);
-    setPubKey(null);
     setOrdAddress(null);
     setIdentityAddress(null);
     setSocialProfile(null);
@@ -113,114 +143,81 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshOrdinals = useCallback(async () => {
-    if (!wallet) return;
+    if (!ctx) return;
     try {
-      const result = await wallet.getOrdinals();
-      let rawOrdinals: RawOrdinal[] = [];
-      if (Array.isArray(result)) {
-        rawOrdinals = result as RawOrdinal[];
-      } else if (result && "data" in result) {
-        rawOrdinals = (result.data || []) as RawOrdinal[];
-      }
-      setOrdinals(normalizeOrdinals(rawOrdinals));
+      const result = await getOrdinals.execute(ctx, {});
+      setOrdinals(normalizeOrdinals(result.outputs || []));
     } catch (err) {
       console.error("Failed to fetch ordinals:", err);
     }
-  }, [wallet]);
+  }, [ctx]);
 
-  useEffect(() => {
-    if (!wallet) return;
+  // Hydrate derived account data (addresses, profile, ordinals) on connect.
+  const hydrate = useCallback(async () => {
+    if (!ctx) return;
 
-    const walletWithEvents = wallet as {
-      on?: (event: string, handler: () => void) => void;
-      removeListener?: (event: string, handler: () => void) => void;
-    };
-
-    const handleSignedOut = () => {
-      resetState();
-    };
-
-    const handleSwitchAccount = () => {
-      resetState();
-    };
-
-    try {
-      walletWithEvents.on?.("signedOut", handleSignedOut);
-      walletWithEvents.on?.("switchAccount", handleSwitchAccount);
-    } catch {
-      // Events may not be supported
-    }
-
-    return () => {
-      try {
-        walletWithEvents.removeListener?.("signedOut", handleSignedOut);
-        walletWithEvents.removeListener?.("switchAccount", handleSwitchAccount);
-      } catch {
-        // Cleanup may not be supported
-      }
-    };
-  }, [wallet, resetState]);
-
-  const connect = useCallback(async (): Promise<string | undefined> => {
-    if (!wallet) {
-      console.error("Wallet not initialized");
-      return undefined;
-    }
-
-    try {
-      const publicKey = await wallet.connect();
-      const addresses = await wallet.getAddresses();
-
-      if (publicKey) {
-        setPubKey(publicKey);
-      }
-      if (addresses) {
-        setAddress(addresses.bsvAddress);
-        setOrdAddress(addresses.ordAddress);
-        setIdentityAddress(addresses.identityAddress);
-      }
-
-      const [profileResult, ordinalsResult] = await Promise.allSettled([
-        wallet.getSocialProfile(),
-        wallet.getOrdinals(),
+    const [addrResult, profileResult, ordinalsResult] =
+      await Promise.allSettled([
+        deriveDepositAddresses.execute(ctx, { startIndex: 0, count: 1 }),
+        getProfile.execute(ctx, {}),
+        getOrdinals.execute(ctx, {}),
       ]);
 
-      if (profileResult.status === "fulfilled" && profileResult.value) {
+    if (addrResult.status === "fulfilled") {
+      const deposit = addrResult.value.derivations?.[0]?.address ?? null;
+      // 1Sat wallets receive BSV and ordinals at the same deposit address.
+      setAddress(deposit);
+      setOrdAddress(deposit);
+      setIdentityAddress(deposit);
+    }
+
+    if (profileResult.status === "fulfilled" && !profileResult.value.error) {
+      const profile = profileResult.value.profile;
+      if (profile) {
         setSocialProfile({
-          displayName: profileResult.value.displayName,
-          avatar: profileResult.value.avatar,
+          displayName:
+            typeof profile.name === "string" ? profile.name : undefined,
+          avatar: resolveProfileImage(
+            typeof profile.image === "string" ? profile.image : undefined,
+          ),
         });
       }
+    }
 
-      if (ordinalsResult.status === "fulfilled") {
-        const result = ordinalsResult.value;
-        let rawOrdinals: RawOrdinal[] = [];
-        if (Array.isArray(result)) {
-          rawOrdinals = result as RawOrdinal[];
-        } else if (result && "data" in result) {
-          rawOrdinals = (result.data || []) as RawOrdinal[];
-        }
-        setOrdinals(normalizeOrdinals(rawOrdinals));
-      }
+    if (ordinalsResult.status === "fulfilled") {
+      setOrdinals(normalizeOrdinals(ordinalsResult.value.outputs || []));
+    }
+  }, [ctx]);
 
-      setIsConnected(true);
-      return publicKey;
+  useEffect(() => {
+    if (ctx) {
+      hydrate();
+    } else {
+      resetState();
+    }
+  }, [ctx, hydrate, resetState]);
+
+  const connect = useCallback(async (): Promise<string | undefined> => {
+    try {
+      await connectWallet();
+      return identityKey ?? undefined;
     } catch (error) {
       console.error("Failed to connect wallet:", error);
       throw error;
     }
-  }, [wallet]);
+  }, [connectWallet, identityKey]);
 
   const disconnect = useCallback(() => {
+    disconnectWallet();
     resetState();
-  }, [resetState]);
+  }, [disconnectWallet, resetState]);
 
   const value = useMemo(
     () => ({
-      wallet,
+      ctx,
       isConnected,
       address,
-      pubKey,
+      pubKey: identityKey,
       ordAddress,
       identityAddress,
       socialProfile,
@@ -230,10 +227,10 @@ export function WalletStateProvider({ children }: { children: ReactNode }) {
       refreshOrdinals,
     }),
     [
-      wallet,
+      ctx,
       isConnected,
       address,
-      pubKey,
+      identityKey,
       ordAddress,
       identityAddress,
       socialProfile,
