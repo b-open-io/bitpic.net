@@ -16,9 +16,9 @@ const jsonLd = {
 export default function Home() {
   return (
     <>
-      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static JSON-LD */}
       <script
         type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: static JSON-LD built from a constant, no user input
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <Hero />
