@@ -1,182 +1,29 @@
 "use client";
 
-import { Check, Moon, Palette, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useThemeTokens } from "@/hooks/use-theme-tokens";
-import { useWallet } from "@/lib/use-wallet";
-import { cn } from "@/lib/utils";
 
 export function ThemeSelector() {
-  const { isConnected } = useWallet();
   const { resolvedTheme, setTheme } = useTheme();
-  const {
-    themes,
-    activeOrigin,
-    activeTheme,
-    loadTheme,
-    resetTheme,
-    isLoading,
-  } = useThemeTokens();
-  const loadingMetadata = isLoading;
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const hasThemeTokens = isConnected && themes.length > 0;
-  const effectiveTheme = mounted ? resolvedTheme : undefined;
+  const isDark = mounted && resolvedTheme === "dark";
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn("h-8 w-8 relative", activeOrigin && "text-primary")}
-        >
-          {!mounted ? (
-            <Sun className="h-4 w-4" />
-          ) : activeOrigin ? (
-            <Palette className="h-4 w-4" />
-          ) : effectiveTheme === "dark" ? (
-            <Moon className="h-4 w-4" />
-          ) : (
-            <Sun className="h-4 w-4" />
-          )}
-          {activeOrigin && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-primary rounded-full" />
-          )}
-          <span className="sr-only">Theme settings</span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-0">
-        {/* Mode Section */}
-        <div className="p-3 border-b border-border">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Mode</p>
-          <div className="flex gap-1">
-            <Button
-              variant={effectiveTheme === "light" ? "default" : "outline"}
-              size="sm"
-              className="flex-1 h-8 gap-1.5"
-              onClick={() => setTheme("light")}
-            >
-              <Sun className="h-3.5 w-3.5" />
-              Light
-            </Button>
-            <Button
-              variant={effectiveTheme === "dark" ? "default" : "outline"}
-              size="sm"
-              className="flex-1 h-8 gap-1.5"
-              onClick={() => setTheme("dark")}
-            >
-              <Moon className="h-3.5 w-3.5" />
-              Dark
-            </Button>
-          </div>
-        </div>
-
-        {/* Theme Tokens Section */}
-        {hasThemeTokens && (
-          <div className="p-3">
-            <p className="text-xs font-medium text-muted-foreground mb-2">
-              Your Theme Tokens
-            </p>
-            {loadingMetadata ? (
-              <div className="space-y-2">
-                {[1, 2].map((i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
-              </div>
-            ) : (
-              <ScrollArea className={themes.length > 4 ? "h-40" : ""}>
-                <div className="space-y-1">
-                  {themes.map((theme) => (
-                    <button
-                      key={theme.origin}
-                      type="button"
-                      onClick={() => loadTheme(theme.origin)}
-                      disabled={isLoading}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-2 py-2 rounded-md text-left transition-colors",
-                        "hover:bg-muted",
-                        theme.origin === activeOrigin && "bg-primary/10",
-                        isLoading && "opacity-50 cursor-not-allowed",
-                      )}
-                    >
-                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                        {theme.origin === activeOrigin && (
-                          <Check className="h-3 w-3 text-primary" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className={cn(
-                            "text-sm font-medium truncate",
-                            theme.origin === activeOrigin && "text-primary",
-                          )}
-                        >
-                          {theme.name}
-                        </p>
-                        {theme.author && (
-                          <p className="text-xs text-muted-foreground truncate">
-                            by {theme.author}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-
-            {activeOrigin && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full mt-2 h-8 text-xs text-muted-foreground"
-                onClick={resetTheme}
-                disabled={isLoading}
-              >
-                Reset to default
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* Active Theme Info */}
-        {activeTheme && (
-          <div className="px-3 pb-3 pt-0">
-            <div className="p-2 rounded-md bg-muted/50 border border-border">
-              <p className="text-xs text-muted-foreground">Active theme</p>
-              <p className="text-sm font-medium truncate">{activeTheme.name}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Theme token promo - only show if connected with no tokens */}
-        {isConnected && themes.length === 0 && (
-          <div className="p-3 border-t border-border">
-            <a
-              href="https://themetoken.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-primary block text-center"
-            >
-              Get a theme token
-            </a>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8"
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+    >
+      {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+      <span className="sr-only">Toggle light/dark theme</span>
+    </Button>
   );
 }

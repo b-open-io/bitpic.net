@@ -19,7 +19,6 @@
         "@radix-ui/react-tabs": "^1.1.13",
         "@scalar/nextjs-api-reference": "^0.9.5",
         "@tanstack/react-query": "^5.90.12",
-        "@theme-token/sdk": "^0.0.12",
         "bitcoin-image": "^0.0.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -367,8 +366,6 @@
     "@tanstack/query-core": ["@tanstack/query-core@5.90.12", "", {}, "sha512-T1/8t5DhV/SisWjDnaiU2drl6ySvsHj1bHBCWNXd+/T+Hh1cf6JodyEYMd5sgwm+b/mETT4EV3H+zCVczCU5hg=="],
 
     "@tanstack/react-query": ["@tanstack/react-query@5.90.12", "", { "dependencies": { "@tanstack/query-core": "5.90.12" }, "peerDependencies": { "react": "^18 || ^19" } }, "sha512-graRZspg7EoEaw0a8faiUASCyJrqjKPdqJ9EwuDRUF9mEYJ1YPczI9H+/agJ0mOJkPCJDk0lsz5QTrLZ/jQ2rg=="],
-
-    "@theme-token/sdk": ["@theme-token/sdk@0.0.12", "", { "dependencies": { "zod": "^3.24.1" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" }, "optionalPeers": ["react"] }, "sha512-E3YyBqCfLg6wlPurwMqBWjqryOFo7rI3T1bcv64MLGjQAyb3aVbS6xnR1BwnKIrlOQ96i0ZvXtYWk98CiMXBDA=="],
 
     "@types/node": ["@types/node@20.19.27", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-N2clP5pJhB2YnZJ3PIHFk5RkygRX5WO/5f0WC08tp0wd+sv0rsJk3MqWn3CbNmT2J505a5336jaQj4ph1AdMug=="],
 

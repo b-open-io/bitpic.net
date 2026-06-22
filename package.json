@@ -24,7 +24,6 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@scalar/nextjs-api-reference": "^0.9.5",
     "@tanstack/react-query": "^5.90.12",
-    "@theme-token/sdk": "^0.0.12",
     "bitcoin-image": "^0.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
