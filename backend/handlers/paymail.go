@@ -1,19 +1,28 @@
 package handlers
 
 import (
+	"github.com/b-open-io/bitpic/bitpic"
 	"github.com/b-open-io/bitpic/storage"
 	"github.com/gofiber/fiber/v2"
 )
 
+// feeTolerance is the satoshi shortfall we accept between the fee the wallet
+// quoted (at the exchange rate when the user paid) and what actually landed
+// on-chain. Small and fixed — it only absorbs rounding, not rate drift.
+const feeTolerance = 1000
+
 // PaymailHandler handles paymail-related endpoints
 type PaymailHandler struct {
-	redis *storage.RedisClient
+	redis      *storage.RedisClient
+	feeAddress string
 }
 
-// NewPaymailHandler creates a new paymail handler
-func NewPaymailHandler(redis *storage.RedisClient) *PaymailHandler {
+// NewPaymailHandler creates a new paymail handler. feeAddress is the address
+// that must receive the registration fee.
+func NewPaymailHandler(redis *storage.RedisClient, feeAddress string) *PaymailHandler {
 	return &PaymailHandler{
-		redis: redis,
+		redis:      redis,
+		feeAddress: feeAddress,
 	}
 }
 
@@ -42,9 +51,23 @@ func (h *PaymailHandler) Get(c *fiber.Ctx) error {
 	return c.JSON(paymail)
 }
 
-// Register creates a new paymail record
+// RegisterRequest is the paymail registration request body. The wallet pays the
+// registration fee and includes the signed fee transaction (bare tx or atomic
+// BEEF hex) plus feeSats — the satoshi amount it quoted at the exchange rate at
+// payment time.
+type RegisterRequest struct {
+	Handle         string `json:"handle"`
+	IdentityPubkey string `json:"identityPubkey"`
+	PaymentAddress string `json:"paymentAddress"`
+	OrdAddress     string `json:"ordAddress"`
+	PaymentRawtx   string `json:"paymentRawtx"`
+	FeeSats        uint64 `json:"feeSats"`
+}
+
+// Register creates a new paymail record after verifying the registration fee
+// was paid to the fee address.
 func (h *PaymailHandler) Register(c *fiber.Ctx) error {
-	var req storage.PaymailData
+	var req RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
@@ -72,6 +95,31 @@ func (h *PaymailHandler) Register(c *fiber.Ctx) error {
 			"error": "Ordinals address is required",
 		})
 	}
+	if req.PaymentRawtx == "" || req.FeeSats == 0 {
+		return c.Status(fiber.StatusPaymentRequired).JSON(fiber.Map{
+			"error": "Registration fee payment is required",
+		})
+	}
+
+	// Verify the fee transaction pays the fee address. Parsed locally from the
+	// wallet-signed tx, so this confirms the instant the user pays.
+	txBytes, err := extractTxBytes(req.PaymentRawtx)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid fee transaction: " + err.Error(),
+		})
+	}
+	payment, err := bitpic.VerifyFeePayment(txBytes, h.feeAddress)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid fee transaction: " + err.Error(),
+		})
+	}
+	if payment.PaidSats+feeTolerance < req.FeeSats {
+		return c.Status(fiber.StatusPaymentRequired).JSON(fiber.Map{
+			"error": "Fee payment is insufficient",
+		})
+	}
 
 	// Check if handle already exists
 	existing, _ := h.redis.GetPaymail(req.Handle)
@@ -81,8 +129,28 @@ func (h *PaymailHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
+	// Claim the fee txid so one payment can't register multiple handles.
+	fresh, err := h.redis.ClaimPaymentTxid(payment.TxID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to register paymail",
+		})
+	}
+	if !fresh {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": "This fee payment has already been used",
+		})
+	}
+
 	// Store paymail
-	if err := h.redis.SetPaymail(&req); err != nil {
+	data := &storage.PaymailData{
+		Handle:         req.Handle,
+		IdentityPubkey: req.IdentityPubkey,
+		PaymentAddress: req.PaymentAddress,
+		OrdAddress:     req.OrdAddress,
+		PaymentTxid:    payment.TxID,
+	}
+	if err := h.redis.SetPaymail(data); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to register paymail",
 		})

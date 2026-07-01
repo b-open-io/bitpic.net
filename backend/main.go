@@ -29,6 +29,7 @@ func main() {
 	subscriptionID := getEnv("JUNGLEBUS_SUBSCRIPTION_ID", "d40d60de8e6fdaa627eefb14ea685052f5955e278d54f19e6564d6c5e5015eb3")
 	ordfsURL := getEnv("ORDFS_URL", "https://ordfs.network")
 	arcURL := getEnv("ARC_URL", "https://arc.taal.com")
+	feeAddress := getEnv("BITPIC_FEE_ADDRESS", "15q8YQSqUa9uTh6gh4AVixxq29xkpBBP9z")
 	cacheTTLStr := getEnv("IMAGE_CACHE_TTL", "2592000") // 30 days default
 
 	// Parse cache TTL
@@ -93,7 +94,7 @@ func main() {
 	existsHandler := handlers.NewExistsHandler(redis)
 	broadcastHandler := handlers.NewBroadcastHandler(arcURL, redis)
 	statusHandler := handlers.NewStatusHandler(redis, subscriber)
-	paymailHandler := handlers.NewPaymailHandler(redis)
+	paymailHandler := handlers.NewPaymailHandler(redis, feeAddress)
 
 	// Routes
 	app.Get("/health", handlers.Health)

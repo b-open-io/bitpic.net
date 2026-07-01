@@ -60,12 +60,12 @@ export default function AboutPage() {
         <hr className="my-8 border-border" />
 
         <h2 className="text-2xl font-bold tracking-tight">
-          Free @bitpic.net Paymail
+          @bitpic.net Paymail
         </h2>
 
         <p>
-          BitPic.net provides free paymail addresses that include built-in
-          avatar support. When you register a{" "}
+          BitPic.net provides paymail addresses that include built-in avatar
+          support for a one-time $1 fee. When you register a{" "}
           <code className="bg-muted px-1 py-0.5 font-mono text-sm">
             yourname@bitpic.net
           </code>{" "}
@@ -98,7 +98,7 @@ export default function AboutPage() {
             href="/paymail"
             className="text-primary underline underline-offset-4"
           >
-            Register your free @bitpic.net paymail
+            Register your @bitpic.net paymail
           </Link>{" "}
           to get started.
         </p>

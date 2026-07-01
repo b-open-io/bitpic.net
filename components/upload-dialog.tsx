@@ -655,7 +655,7 @@ export function UploadDialog({ onClose, onSuccess }: UploadDialogProps) {
                     You need a @bitpic.net paymail to upload avatars
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Register a free paymail to link your avatar to your identity
+                    Register a paymail ($1) to link your avatar to your identity
                   </p>
                 </div>
                 <div className="flex gap-2">

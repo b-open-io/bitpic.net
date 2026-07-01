@@ -54,6 +54,16 @@ export interface RegisterPaymailRequest {
   identityPubkey: string;
   paymentAddress: string;
   ordAddress: string;
+  /** Signed registration-fee transaction (bare tx or atomic BEEF hex). */
+  paymentRawtx: string;
+  /** Satoshis quoted for the $1 fee at the exchange rate when paid. */
+  feeSats: number;
+}
+
+export interface PaymailFeeResponse {
+  usd: number;
+  rate: number;
+  satoshis: number;
 }
 
 export interface RegisterPaymailResponse {
@@ -213,6 +223,17 @@ export class BitPicAPI {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
+  }
+
+  async getPaymailFee(): Promise<PaymailFeeResponse> {
+    const response = await fetch(`${this.baseUrl}/api/exchange-rate`);
+    if (!response.ok) {
+      const error = await response
+        .json()
+        .catch(() => ({ error: response.statusText }));
+      throw new Error(error.error || "Failed to fetch registration fee");
+    }
+    return await response.json();
   }
 
   async lookupPaymailByPubkey(pubkey: string): Promise<PaymailLookupResponse> {

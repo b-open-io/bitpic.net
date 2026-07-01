@@ -7,6 +7,8 @@ interface RegisterRequest {
   identityPubkey: string;
   paymentAddress: string;
   ordAddress: string;
+  paymentRawtx: string;
+  feeSats: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -23,6 +25,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 },
+      );
+    }
+
+    // Registration fee payment is required (verified on-chain by the backend).
+    if (!body.paymentRawtx || !body.feeSats) {
+      return NextResponse.json(
+        { error: "Registration fee payment is required" },
+        { status: 402 },
       );
     }
 
@@ -58,6 +68,8 @@ export async function POST(request: NextRequest) {
         identityPubkey: body.identityPubkey,
         paymentAddress: body.paymentAddress,
         ordAddress: body.ordAddress,
+        paymentRawtx: body.paymentRawtx,
+        feeSats: body.feeSats,
       }),
     });
 

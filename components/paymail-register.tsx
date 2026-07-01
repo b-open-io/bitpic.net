@@ -1,7 +1,9 @@
 "use client";
 
+import { sendBsv } from "@1sat/actions";
+import { Utils } from "@bsv/sdk";
 import { Check, Loader2, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,8 +14,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { RegisterPaymailRequest } from "@/lib/api";
+import type { PaymailFeeResponse, RegisterPaymailRequest } from "@/lib/api";
 import { api } from "@/lib/api";
+import { FEE_ADDRESS } from "@/lib/fees";
 import { useWallet } from "@/lib/use-wallet";
 
 interface PaymailRegisterProps {
@@ -30,7 +33,9 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const { isConnected, connect, address, pubKey } = useWallet();
+  const [fee, setFee] = useState<PaymailFeeResponse | null>(null);
+  const [registerStatus, setRegisterStatus] = useState("");
+  const { ctx, isConnected, connect, address, pubKey } = useWallet();
 
   const resetState = () => {
     setStep("handle");
@@ -39,7 +44,28 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
     setIsCheckingAvailability(false);
     setIsRegistering(false);
     setIsConnecting(false);
+    setFee(null);
+    setRegisterStatus("");
   };
+
+  // Quote the $1 fee (in sats, at the live rate) as soon as the user reaches
+  // the wallet step, so they see the amount before paying.
+  useEffect(() => {
+    if (step !== "wallet") return;
+    let cancelled = false;
+    api
+      .getPaymailFee()
+      .then((f) => {
+        if (!cancelled) setFee(f);
+      })
+      .catch(() => {
+        // Non-fatal here; the fee is re-fetched at payment time, which surfaces
+        // any real failure with a clear error.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
 
   const handleClose = (open: boolean) => {
     if (!open) {
@@ -99,21 +125,39 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
   };
 
   const registerPaymail = async () => {
-    if (!address || !pubKey) {
+    if (!ctx || !address || !pubKey) {
       setHandleError("Wallet not properly connected. Please reconnect.");
       return;
     }
 
     setIsRegistering(true);
     setStep("registering");
+    setHandleError("");
 
     try {
+      // Quote the fee at payment time so the amount tracks the live rate.
+      setRegisterStatus("Fetching current fee...");
+      const quote = await api.getPaymailFee();
+
+      // Pay the $1 fee to the fee address. The wallet builds, signs, and
+      // broadcasts; the returned atomic BEEF is the payment proof.
+      setRegisterStatus("Confirm the payment in your wallet...");
+      const payment = await sendBsv.execute(ctx, {
+        requests: [{ address: FEE_ADDRESS, satoshis: quote.satoshis }],
+      });
+      if (payment.error || !payment.tx) {
+        throw new Error(payment.error || "Payment was not completed");
+      }
+
+      setRegisterStatus("Linking your wallet addresses...");
       const request: RegisterPaymailRequest = {
         handle: handle.toLowerCase(),
         identityPubkey: pubKey,
         // 1Sat wallets receive BSV and ordinals at the same deposit address.
         paymentAddress: address,
         ordAddress: address,
+        paymentRawtx: Utils.toHex(payment.tx),
+        feeSats: quote.satoshis,
       };
 
       const result = await api.registerPaymail(request);
@@ -131,6 +175,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
       setStep("wallet");
     } finally {
       setIsRegistering(false);
+      setRegisterStatus("");
     }
   };
 
@@ -202,7 +247,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
               </DialogTitle>
               <DialogDescription>
                 {isConnected
-                  ? "Review your addresses before registering"
+                  ? "Review your addresses and pay the one-time fee to register"
                   : "Connect your Yours Wallet to register your paymail"}
               </DialogDescription>
             </DialogHeader>
@@ -234,6 +279,19 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                     </div>
                   </>
                 )}
+                <div className="flex items-center justify-between border-t border-border/40 pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    One-time registration fee
+                  </p>
+                  <p className="text-sm font-medium text-foreground">
+                    ${fee?.usd ?? 1}
+                    {fee && (
+                      <span className="ml-1 font-mono text-xs text-muted-foreground">
+                        (~{fee.satoshis.toLocaleString()} sats)
+                      </span>
+                    )}
+                  </p>
+                </div>
               </div>
               {handleError && (
                 <p className="text-sm text-destructive">{handleError}</p>
@@ -258,7 +316,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
                     Connecting...
                   </>
                 ) : isConnected ? (
-                  "Register Paymail"
+                  `Pay $${fee?.usd ?? 1} & Register`
                 ) : (
                   "Connect Wallet"
                 )}
@@ -279,7 +337,7 @@ export function PaymailRegister({ open, onOpenChange }: PaymailRegisterProps) {
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
-                Linking your wallet addresses...
+                {registerStatus || "Linking your wallet addresses..."}
               </p>
             </div>
           </>

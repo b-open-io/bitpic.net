@@ -288,7 +288,19 @@ type PaymailData struct {
 	IdentityPubkey string `json:"identityPubkey"`
 	PaymentAddress string `json:"paymentAddress"`
 	OrdAddress     string `json:"ordAddress"`
+	PaymentTxid    string `json:"paymentTxid,omitempty"`
 	CreatedAt      int64  `json:"createdAt"`
+}
+
+// ClaimPaymentTxid atomically records a fee-payment txid, returning true only
+// the first time it is seen. Prevents a single fee payment from registering
+// more than one paymail.
+func (r *RedisClient) ClaimPaymentTxid(txid string) (bool, error) {
+	added, err := r.client.SAdd(r.ctx, "paymail:paidtxids", txid).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to claim payment txid: %w", err)
+	}
+	return added == 1, nil
 }
 
 // SetPaymail stores a paymail record

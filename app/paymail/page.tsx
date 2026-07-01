@@ -74,7 +74,7 @@ export default function PaymailPage() {
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             {existingPaymail
               ? "Manage your paymail address and upload your avatar"
-              : "Free paymail address that forwards to your Yours Wallet. Receive BSV and ordinals with a memorable address."}
+              : "A memorable paymail address that forwards to your Yours Wallet. Receive BSV and ordinals. One-time $1 registration fee."}
           </p>
           <div className="pt-4">
             {isLoading ? (
@@ -100,7 +100,7 @@ export default function PaymailPage() {
                 onClick={() => setRegisterOpen(true)}
                 className="font-semibold"
               >
-                Register Free
+                Register for $1
               </Button>
             ) : (
               <Button
